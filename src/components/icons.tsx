@@ -2,6 +2,9 @@ import {
   PenLine, FileText, BookOpen, RefreshCw, SpellCheck, Minimize2,
   Type, Heading1, Tag, AlignLeft, Search, Package, Megaphone, Mail, Target, DoorOpen,
   Flag, HelpCircle, ListTree, GitBranch, SlidersHorizontal, Lightbulb, Newspaper, Clapperboard,
+  Linkedin, Twitter, Instagram, Youtube, Briefcase, UserPlus, ClipboardList, ListChecks,
+  FileSignature, Scale, BarChart3, Code2, Network, ShieldCheck, Users, Mic, MousePointerClick,
+  LayoutTemplate, Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -30,6 +33,11 @@ const MAP: Record<string, LucideIcon> = {
   package: Package, megaphone: Megaphone, mail: Mail, target: Target, doorOpen: DoorOpen,
   flag: Flag, helpCircle: HelpCircle, listTree: ListTree, gitBranch: GitBranch,
   sliders: SlidersHorizontal, lightbulb: Lightbulb, newspaper: Newspaper, clapperboard: Clapperboard,
+  linkedin: Linkedin, twitter: Twitter, instagram: Instagram, youtube: Youtube,
+  briefcase: Briefcase, userPlus: UserPlus, clipboardList: ClipboardList, listChecks: ListChecks,
+  fileSignature: FileSignature, scale: Scale, barChart: BarChart3, code: Code2, network: Network,
+  shieldCheck: ShieldCheck, users: Users, mic: Mic, mousePointer: MousePointerClick,
+  layoutTemplate: LayoutTemplate, zap: Zap,
 };
 
 export function ToolIcon({ name, className = "w-5 h-5" }: { name: string; className?: string }) {
@@ -43,4 +51,7 @@ export const CATEGORY_META: Record<string, { label: string; chip: string }> = {
   seo: { label: "SEO", chip: "bg-chart-4/15 text-chart-4" },
   marketing: { label: "Marketing", chip: "bg-chart-5/15 text-chart-5" },
   productivity: { label: "Productivity", chip: "bg-foreground/10 text-foreground" },
+  social: { label: "Social", chip: "bg-sky-600/12 text-sky-700 dark:text-sky-400" },
+  business: { label: "Business", chip: "bg-amber-600/12 text-amber-700 dark:text-amber-400" },
+  research: { label: "Research", chip: "bg-violet-600/12 text-violet-700 dark:text-violet-400" },
 };

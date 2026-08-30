@@ -56,7 +56,7 @@ export function ToolsPage() {
           <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search tools…" className="pl-9" aria-label="Search tools" />
         </div>
         <div className="flex gap-1.5 overflow-x-auto scroll-slim -mx-1 px-1" role="tablist" aria-label="Tool categories">
-          {["all", "writing", "content", "seo", "marketing", "productivity"].map(c => (
+          {["all", "writing", "content", "seo", "marketing", "social", "business", "research", "productivity"].map(c => (
             <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)}
               className={cn("px-3 h-9 rounded-lg text-[12.5px] font-medium whitespace-nowrap border transition-colors",
                 cat === c ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground hover:text-foreground hover:bg-accent")}>

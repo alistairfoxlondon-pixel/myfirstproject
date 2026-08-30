@@ -3,7 +3,7 @@ import { Navigate, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, CreditCard, Blocks, Settings as SettingsIcon, LogOut, ArrowLeft,
   Search, Pencil, Trash2, RotateCcw, Plus, Eye, EyeOff, AlertTriangle, Check, X, Activity, Newspaper,
-  ChevronUp, ChevronDown, Download, Globe2,
+  ChevronUp, ChevronDown, Download, Globe2, Cpu, DollarSign, Bot,
 } from "lucide-react";
 import { Logo, ToolIcon, CATEGORY_META } from "../components/icons";
 import { AreaChart, Badge, BarChart, Button, Card, Field, Input, Modal, Select, Switch, Tabs, Textarea, cn } from "../components/ui";
@@ -13,7 +13,9 @@ import {
   adminDeletePlan, adminDeleteTool, adminDeleteUser, adminListUsers, adminResetUsage, adminSavePlan,
   adminSaveSettings, adminSaveTool, adminStats, adminUpdateUser, fmtDate, fmtDateTime, fmtMoney, fmtNum,
   getSettings, resetDemoData, buildSitemap,
+  adminListModels, adminSaveModel, adminToggleModel, adminCostStats,
 } from "../lib/services";
+import type { AiModel } from "../lib/db";
 import { adminAddRedirect, adminDeleteRedirect, adminListRedirects } from "../lib/content";
 
 const NAV = [
@@ -361,7 +363,7 @@ export function AdminPlans() {
 }
 
 /* ================= tools ================= */
-const OUTPUT_KINDS = ["article", "blog", "rewrite", "paragraphRewrite", "improve", "grammar", "summary", "titles", "headline", "metaTitle", "metaDesc", "seoBrief", "product", "social", "email", "adCopy", "intro", "conclusion", "faq", "outline", "keywords", "ideas", "press", "script"];
+const OUTPUT_KINDS = ["article", "blog", "rewrite", "paragraphRewrite", "improve", "grammar", "summary", "titles", "headline", "metaTitle", "metaDesc", "seoBrief", "product", "social", "email", "adCopy", "intro", "conclusion", "faq", "outline", "keywords", "ideas", "press", "script", "linkedin", "xthread", "igcaption", "ytDescription", "socialHook", "threadGenerator", "proposal", "jobDescription", "meetingActions", "sopGenerator", "coverLetter", "questionFinder", "competitorAnalysis", "serpAnalysis", "contentBrief", "schemaGen", "topicalMap", "seoAudit", "persona", "brandVoiceGen", "ctaGenerator", "landingCopy", "campaignGen"];
 
 export function AdminTools() {
   const { user: admin, toast, refresh } = useApp();
@@ -373,7 +375,7 @@ export function AdminTools() {
 
   const newTool = (): Tool => ({
     id: "", slug: "", name: "New AI Tool", tagline: "", category: "writing", icon: "sparkles",
-    outputKind: "article", minTier: "starter", dailyCap: 20, active: true, uses: 0, createdAt: new Date().toISOString(),
+    outputKind: "article", minTier: "starter", dailyCap: 20, modelTier: "economy", active: true, uses: 0, createdAt: new Date().toISOString(),
     fields: [
       { key: "topic", label: "Topic", type: "text", required: true, placeholder: "What should it be about?" },
       { key: "tone", label: "Tone of voice", type: "select", options: ["professional", "friendly", "persuasive", "witty", "neutral"], default: "professional" },
@@ -445,6 +447,10 @@ export function AdminTools() {
             </Field>
             <Field label="Minimum tier" help="Plans at this tier and above get access.">
               <Select value={edit.minTier} onChange={e => setEdit(t => ({ ...t!, minTier: e.target.value as Tool["minTier"] }))} options={tierOpts} />
+            </Field>
+            <Field label="Model class" help="Routes this tool to the matching AI model (cost control).">
+              <Select value={edit.modelTier} onChange={e => setEdit(t => ({ ...t!, modelTier: e.target.value as Tool["modelTier"] }))}
+                options={[{ value: "economy", label: "Economy (cheapest)" }, { value: "balanced", label: "Balanced" }, { value: "flagship", label: "Flagship (highest quality)" }]} />
             </Field>
             <Field label="Daily cap per user" help="0 = unlimited."><Input type="number" min={0} value={edit.dailyCap} onChange={e => setEdit(t => ({ ...t!, dailyCap: Number(e.target.value) }))} /></Field>
             <div className="sm:col-span-2">
@@ -717,5 +723,108 @@ function SeoTab({ s, set }: { s: SettingsT; set: <K extends keyof SettingsT>(k: 
         </Card>
       </div>
     </div>
+  );
+}
+
+/* ================= AI models & cost ================= */
+const TIER_LABEL: Record<AiModel["tier"], string> = { economy: "Economy", balanced: "Balanced", flagship: "Flagship" };
+export function AdminModels() {
+  const { user: admin, toast, refresh } = useApp();
+  const isAdmin = admin?.role === "admin";
+  const models = useMemo(() => (isAdmin && admin ? adminListModels(admin) : []), [isAdmin, admin]);
+  const cost = useMemo(() => (isAdmin && admin ? adminCostStats(admin) : null), [isAdmin, admin]);
+  const [edit, setEdit] = useState<AiModel | null>(null);
+  if (!isAdmin || !admin) return <Navigate to={admin ? "/app" : "/login"} replace />;
+
+  const save = () => {
+    if (!edit) return;
+    adminSaveModel(admin, edit);
+    toast("success", "Model saved", `${edit.name} (${TIER_LABEL[edit.tier]})`);
+    setEdit(null); refresh();
+  };
+
+  return (
+    <AdminShell title="AI Models & Cost" sub="Route tools to the right model class and keep spend visible"
+      actions={<Button size="sm" onClick={() => setEdit({ id: "", provider: "openai", name: "", tier: "balanced", costInPer1k: 0.0004, costOutPer1k: 0.0016, maxOutputTokens: 4096, enabled: true, priority: 1, fallbackId: null })}><Plus className="w-3.5 h-3.5" /> Add model</Button>}>
+      {cost && (
+        <div className="grid sm:grid-cols-3 gap-3.5 mb-5">
+          <Card className="p-5"><p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Est. total spend</p><p className="font-display text-[26px] font-extrabold tracking-tight mt-1 tabular">${cost.totalCost.toFixed(4)}</p></Card>
+          <Card className="p-5"><p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Generations</p><p className="font-display text-[26px] font-extrabold tracking-tight mt-1 tabular">{fmtNum(cost.totalGens)}</p></Card>
+          <Card className="p-5"><p className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Avg cost / generation</p><p className="font-display text-[26px] font-extrabold tracking-tight mt-1 tabular">${cost.avgCostPerGen.toFixed(5)}</p></Card>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
+        <Card className="overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2"><Cpu className="w-4 h-4 text-muted-foreground" /><h2 className="font-display font-bold text-[15px] tracking-tight">Model registry</h2></div>
+          <div className="overflow-x-auto scroll-slim">
+            <table className="w-full min-w-[640px] text-[13px]">
+              <thead><tr className="text-left text-[10.5px] uppercase tracking-wide text-muted-foreground border-b border-border bg-muted/40">
+                <th className="px-4 py-2.5 font-medium">Model</th><th className="px-4 py-2.5 font-medium">Tier</th>
+                <th className="px-4 py-2.5 font-medium">Out $/1k</th><th className="px-4 py-2.5 font-medium">Enabled</th><th className="px-4 py-2.5" />
+              </tr></thead>
+              <tbody>
+                {models.map(m => (
+                  <tr key={m.id} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
+                    <td className="px-4 py-3"><p className="font-semibold">{m.name}</p><p className="text-[11px] text-muted-foreground font-mono">{m.provider}</p></td>
+                    <td className="px-4 py-3"><Badge tone={m.tier === "flagship" ? "warn" : m.tier === "balanced" ? "outline" : "muted"}>{TIER_LABEL[m.tier]}</Badge></td>
+                    <td className="px-4 py-3 font-mono tabular">${m.costOutPer1k}</td>
+                    <td className="px-4 py-3"><Switch checked={m.enabled} onChange={v => { adminToggleModel(admin, m.id, v); refresh(); }} /></td>
+                    <td className="px-4 py-3 text-right"><button onClick={() => setEdit(m)} aria-label={`Edit ${m.name}`} className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"><Pencil className="w-4 h-4" /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-5 py-3.5 text-[11.5px] text-muted-foreground leading-relaxed border-t border-border">Each tool is assigned a model class (Economy / Balanced / Flagship). Requests route to the cheapest enabled model in that class, with automatic fallback. API keys never reach the browser.</p>
+        </Card>
+
+        <div className="space-y-4">
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-3"><DollarSign className="w-4 h-4 text-muted-foreground" /><h2 className="font-display font-bold text-[15px] tracking-tight">Cost by model</h2></div>
+            {cost && cost.byModel.length ? (
+              <ul className="space-y-2.5">{cost.byModel.map(r => (
+                <li key={r.model} className="flex items-center gap-3 text-[13px]">
+                  <span className="font-mono w-32 truncate">{r.model}</span>
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-foreground/70" style={{ width: `${Math.max(3, (r.cost / (cost.byModel[0].cost || 1)) * 100)}%` }} /></div>
+                  <span className="font-mono tabular text-[12px] w-20 text-right">${r.cost.toFixed(4)}</span>
+                </li>))}
+              </ul>
+            ) : <p className="text-[12.5px] text-muted-foreground">No usage recorded yet.</p>}
+          </Card>
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-3"><Bot className="w-4 h-4 text-muted-foreground" /><h2 className="font-display font-bold text-[15px] tracking-tight">Cost by tool</h2></div>
+            {cost && cost.byTool.length ? (
+              <ul className="space-y-2">{cost.byTool.map(r => (
+                <li key={r.tool} className="flex items-center justify-between gap-3 text-[13px]">
+                  <span className="truncate">{r.tool}</span>
+                  <span className="font-mono tabular text-[12px] text-muted-foreground shrink-0">{r.gens} gens · ${r.cost.toFixed(4)}</span>
+                </li>))}
+              </ul>
+            ) : <p className="text-[12.5px] text-muted-foreground">No usage recorded yet.</p>}
+          </Card>
+        </div>
+      </div>
+
+      <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? `Edit ${edit.name}` : "Add AI model"} wide
+        footer={<><Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={save}><Check className="w-4 h-4" /> Save model</Button></>}>
+        {edit && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Provider"><Select value={edit.provider} onChange={e => setEdit(m => ({ ...m!, provider: e.target.value }))} options={["openai", "anthropic", "google", "mistral", "custom"]} /></Field>
+            <Field label="Model name" required><Input value={edit.name} onChange={e => setEdit(m => ({ ...m!, name: e.target.value }))} placeholder="gpt-4.1-mini" className="font-mono" /></Field>
+            <Field label="Tier / class"><Select value={edit.tier} onChange={e => setEdit(m => ({ ...m!, tier: e.target.value as AiModel["tier"] }))} options={[{ value: "economy", label: "Economy — cheap tasks" }, { value: "balanced", label: "Balanced" }, { value: "flagship", label: "Flagship — complex tasks" }]} /></Field>
+            <Field label="Priority" help="Lower is preferred within a tier."><Input type="number" min={1} value={edit.priority} onChange={e => setEdit(m => ({ ...m!, priority: Number(e.target.value) }))} /></Field>
+            <Field label="Input $/1k tokens"><Input type="number" step="0.0001" value={edit.costInPer1k} onChange={e => setEdit(m => ({ ...m!, costInPer1k: Number(e.target.value) }))} className="font-mono" /></Field>
+            <Field label="Output $/1k tokens"><Input type="number" step="0.0001" value={edit.costOutPer1k} onChange={e => setEdit(m => ({ ...m!, costOutPer1k: Number(e.target.value) }))} className="font-mono" /></Field>
+            <Field label="Max output tokens"><Input type="number" min={256} value={edit.maxOutputTokens} onChange={e => setEdit(m => ({ ...m!, maxOutputTokens: Number(e.target.value) }))} className="font-mono" /></Field>
+            <Field label="Fallback model" help="Used if this model is disabled.">
+              <Select value={edit.fallbackId || ""} onChange={e => setEdit(m => ({ ...m!, fallbackId: e.target.value || null }))}
+                options={[{ value: "", label: "None" }, ...models.filter(m => m.id !== edit.id).map(m => ({ value: m.id, label: m.name }))]} />
+            </Field>
+            <label className="sm:col-span-2 flex items-center gap-2.5 text-[13px] font-medium">Enabled for routing <Switch checked={edit.enabled} onChange={v => setEdit(m => ({ ...m!, enabled: v }))} /></label>
+          </div>
+        )}
+      </Modal>
+    </AdminShell>
   );
 }

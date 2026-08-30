@@ -6,7 +6,15 @@ export type OutputKind =
   | "article" | "blog" | "rewrite" | "paragraphRewrite" | "improve" | "grammar"
   | "summary" | "titles" | "headline" | "metaTitle" | "metaDesc" | "seoBrief"
   | "product" | "social" | "email" | "adCopy" | "intro" | "conclusion"
-  | "faq" | "outline" | "keywords" | "ideas" | "press" | "script";
+  | "faq" | "outline" | "keywords" | "ideas" | "press" | "script"
+  /* social suite */
+  | "linkedin" | "xthread" | "igcaption" | "ytDescription" | "socialHook" | "threadGenerator"
+  /* business suite */
+  | "proposal" | "jobDescription" | "meetingActions" | "sopGenerator" | "coverLetter"
+  /* research & SEO suite */
+  | "questionFinder" | "competitorAnalysis" | "serpAnalysis" | "contentBrief" | "schemaGen" | "topicalMap" | "seoAudit"
+  /* marketing suite */
+  | "persona" | "brandVoiceGen" | "ctaGenerator" | "landingCopy" | "campaignGen";
 
 export interface GenResult { text: string; words: number; }
 
@@ -469,9 +477,214 @@ export function generateOutput(kind: OutputKind, inputs: Record<string, string>,
       text = metaDescs(inputs, seed); break;
     case "article": case "blog":
       text = longform(kind, inputs, seed); break;
+    case "linkedin": case "xthread": case "igcaption": case "ytDescription":
+    case "socialHook": case "threadGenerator":
+      text = socialSuite(kind, inputs, seed); break;
+    case "proposal": case "jobDescription": case "meetingActions":
+    case "sopGenerator": case "coverLetter":
+      text = businessSuite(kind, inputs, seed); break;
+    case "questionFinder": case "competitorAnalysis": case "serpAnalysis": case "contentBrief":
+    case "schemaGen": case "topicalMap": case "seoAudit":
+      text = researchSuite(kind, inputs, seed); break;
+    case "persona": case "brandVoiceGen": case "ctaGenerator": case "landingCopy": case "campaignGen":
+      text = marketingSuite(kind, inputs, seed); break;
     default:
       text = structured(kind, inputs, seed);
   }
+  return { text, words: countWords(text) };
+}
+
+/* ============================================================
+   EXPANSION SUITES — social / business / research / marketing
+   ============================================================ */
+
+function socialSuite(kind: OutputKind, inputs: Record<string, string>, seed: number): string {
+  const r = rng(seed);
+  const topic = kw(inputs, ["topic", "title", "subject", "product", "video", "theme"], "your topic");
+  const audience = inputs.audience || "your audience";
+  const hook = inputs.hook || "";
+  const t = topic.charAt(0).toUpperCase() + topic.slice(1);
+  const year = new Date().getFullYear();
+
+  if (kind === "linkedin") {
+    return `**LinkedIn post — ${t}**\n\n${pick(r, [
+      `Most teams treat ${topic} as a task. The best treat it as a system.`,
+      `We spent 90 days rebuilding how we handle ${topic}. Here's what changed.`,
+      `${t} doesn't need more effort. It needs fewer, better decisions.`,
+    ])}\n\nThree shifts that actually moved the needle for ${audience}:\n\n1. We stopped measuring activity and started measuring outcomes.\n2. We reused every asset 4× before creating anything new.\n3. We gave one person clear ownership — not a committee.\n\nThe result: ~40% less time, noticeably better output.\n\n${pick(r, [
+      `Full breakdown in the comments — including the exact template.`,
+      `What's the one thing you'd add? Genuinely curious.`,
+      `If this resonates, repost it — someone on your team needs it.`])}\n\n#${topic.replace(/[^a-zA-Z]/g, "")} #B2B #Strategy`;
+  }
+  if (kind === "xthread" || kind === "threadGenerator") {
+    const n = Math.min(Math.max(parseInt(inputs.posts || inputs.count || "6", 10) || 6, 4), 10);
+    const tweets = [
+      `${t} is misunderstood.\n\nMost advice optimizes for looking busy.\n\nHere's the system that actually works 🧵`,
+      `1/ The goal isn't more ${topic}. It's a repeatable loop:\n\nDecide → Draft → Ship → Measure → Repeat.\n\nEverything else is noise.`,
+      `2/ Start smaller than feels ambitious.\n\nOne asset this week. One metric. One owner.\n\nMomentum beats the perfect plan every time.`,
+      `3/ The 80/20 of ${topic}:\n\n→ Answer real questions (search data)\n→ Reuse what works (repurpose 4×)\n→ Cut what doesn't (prune monthly)`,
+      `4/ Tools should remove friction, not judgment.\n\nAutomate drafts and briefs.\nKeep strategy and taste human.`,
+      `5/ Measure leading indicators:\n\n• Drafts shipped / week\n• Time from idea → publish\n• Clicks per asset\n\nVanity metrics flatter; these inform.`,
+      `6/ If you only do one thing:\n\nPut one ${topic} task on this week's calendar and treat the result as data — not a verdict.`,
+      `That's the system.\n\nFollow for one practical breakdown like this every week.\n\nRT the first tweet if it helped — it takes one second.`,
+    ];
+    return `### X / Twitter thread — ${t} (${n} posts)\n\n${tweets.slice(0, n).map((tw, i) => `**Tweet ${i + 1}**\n${tw}`).join("\n\n---\n\n")}`;
+  }
+  if (kind === "igcaption") {
+    return `**Instagram caption — ${t}**\n\n${pick(r, [
+      `POV: ${topic} finally clicks ✨`,
+      `Save this — 3 ${topic} truths nobody posts about 👇`,
+      `Unpopular opinion: ${topic} is 10% tactic, 90% consistency.`,
+    ])}\n\nHere's what we'd tell a friend starting today:\n\n1️⃣ Consistency beats perfection\n2️⃣ Small experiments, fast feedback\n3️⃣ Document what works, delete what doesn't\n\n${pick(r, [
+      `Drop a 💡 if you're trying this.`,
+      `Tag someone who needs to hear this.`,
+      `Save it for your next planning session 📌`])}\n\n#${topic.replace(/[^a-zA-Z]/g, "")} #ContentTips #Growth #${year}\n\n**Alt text:** Practical ${topic} tips for ${audience}`;
+  }
+  if (kind === "ytDescription") {
+    return `**YouTube description — ${t}**\n\n${pick(r, [
+      `In this video, you'll learn the exact ${topic} workflow we use every week — no fluff, just the steps that matter.`,
+      `Everything you need to get real results with ${topic}, explained step by step with examples on screen.`,
+    ])}\n\n⏱ **Chapters**\n0:00 — Intro & what you'll learn\n0:45 — The ${topic} framework\n2:30 — Step-by-step walkthrough\n6:00 — Common mistakes\n8:15 — Tools & templates\n9:40 — Your action plan\n\n🔗 **Resources**\n• Free ${topic} checklist: [link]\n• Template mentioned: [link]\n\n📌 **Subscribe** for one practical video like this every week.\n\n#${topic.replace(/[^a-zA-Z]/g, "")} #HowTo #${year}`;
+  }
+  /* socialHook */
+  const hooks = [
+    `Nobody talks about the boring part of ${topic} — and that's exactly why it works.`,
+    `I deleted 80% of my ${topic} workflow. Results went up.`,
+    `The ${topic} advice I ignored for 2 years (and now regret).`,
+    `${t} in 2019 vs ${year}: everything that changed.`,
+    `You don't have a ${topic} problem. You have a focus problem.`,
+    `We A/B tested every ${topic} tactic. One won by a mile.`,
+    `Stop consuming ${topic} content. Start shipping this instead.`,
+    `The fastest ${topic} win takes 11 minutes. Here it is.`,
+    `${t} is a skill you borrow before you build. Steal this.`,
+    `If I restarted ${topic} from zero, I'd only do these 3 things.`,
+  ];
+  const n = Math.min(Math.max(parseInt(inputs.count || "8", 10) || 8, 4), 10);
+  return `### Social hooks — ${t}\n\n${hooks.slice(0, n).map((h, i) => `${i + 1}. ${h}  ·  ${pick(r, ["curiosity", "contrarian", "proof-led", "urgency", "story"])}`).join("\n\n")}${hook ? `\n\n_Tip: pair your strongest hook with a specific number or screenshot for maximum scroll-stop._` : ""}`;
+}
+
+function businessSuite(kind: OutputKind, inputs: Record<string, string>, seed: number): string {
+  const r = rng(seed);
+  const topic = kw(inputs, ["project", "role", "meeting", "process", "company", "topic", "subject"], "the project");
+  const audience = inputs.audience || inputs.client || "the stakeholder";
+  const t = topic.charAt(0).toUpperCase() + topic.slice(1);
+
+  if (kind === "proposal") {
+    return `# Proposal — ${t}\n\n**Prepared for:** ${audience} · **Date:** ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}\n\n## 1. Summary\n\n${pick(r, OPENERS.professional).split("{t}").join(topic)} This proposal outlines scope, timeline, and investment for ${topic}.\n\n## 2. Objectives\n\n- Deliver measurable outcomes for ${audience} within the first 30 days.\n- Establish a repeatable workflow, not a one-off deliverable.\n- Provide transparent reporting at every milestone.\n\n## 3. Scope of work\n\n| Phase | Deliverable | Timeline |\n|---|---|---|\n| Discovery | Audit, goals, success metrics | Week 1 |\n| Build | Core ${topic} implementation | Weeks 2–3 |\n| Refine | Review round + revisions | Week 4 |\n| Handoff | Docs, training, support plan | Week 5 |\n\n## 4. Investment\n\n**Option A — Core:** scoped delivery as above.\n**Option B — Growth:** Option A + ongoing optimization retainer.\n\n## 5. Why us\n\n- Relevant, recent experience with ${topic}\n- Clear ownership and a single point of contact\n- Outcomes tied to the metrics you care about\n\n## 6. Next steps\n\nApprove scope → kickoff call within 48 hours → first deliverable in week one.\n\n*Valid for 14 days.*`;
+  }
+  if (kind === "jobDescription") {
+    return `# ${t}\n\n**Location:** ${inputs.location || "Remote"} · **Type:** ${inputs.type || "Full-time"}\n\n## About the role\n\nWe're looking for a ${topic} who treats ${pick(r, ["craft", "outcomes", "systems"])} as a discipline, not a checkbox. You'll own ${topic} end-to-end and shape how the team works.\n\n## What you'll do\n\n- Lead ${topic} from planning through delivery and measurement.\n- Build repeatable processes the whole team can run without you.\n- Partner with stakeholders to turn ambiguous goals into shipped results.\n- Raise the bar with every iteration — and document what works.\n\n## What you'll bring\n\n- 3+ years doing ${topic} in a real, measured environment.\n- Evidence of work you're proud of (portfolio, metrics, or both).\n- Clear written communication — you default to over-sharing context.\n- Comfort owning outcomes, not just tasks.\n\n## Nice to have\n\n- Experience with ${pick(r, ["automation tooling", "cross-functional teams", "data-driven iteration", "mentorship"])}.\n\n## What we offer\n\n- ${pick(r, ["Competitive salary + equity", "Flexible hours and remote-first culture", "A real learning budget", "Direct impact on product direction"])}.\n\n**To apply:** send a short note + one piece of work you'd like us to see.`;
+  }
+  if (kind === "meetingActions") {
+    const notes = inputs.notes || inputs.transcript || "";
+    const items = notes ? notes.split(/[\n.;]+/).filter(Boolean).slice(0, 6) : [
+      "Finalize the scope document", "Confirm budget approval", "Schedule follow-up review",
+      "Assign owners for each workstream", "Circulate the updated timeline",
+    ];
+    return `# Meeting summary & action items — ${t}\n\n**Date:** ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · **Attendees:** ${audience}\n\n## Key decisions\n\n- Agreed to move forward with ${topic} as scoped.\n- Success will be measured against clearly defined outcomes, not activity.\n- Next review scheduled within two weeks.\n\n## Action items\n\n| # | Action | Owner | Due |\n|---|---|---|---|\n${items.map((it, i) => `| ${i + 1} | ${it.trim().charAt(0).toUpperCase() + it.trim().slice(1)} | ${pick(r, ["Alex", "Jordan", "Sam", "Riley"])} | ${pick(r, ["EOW", "Mon", "Wed", "+5 days"])} |`).join("\n")}\n\n## Open questions\n\n- ${pick(r, [`Budget confirmation still pending finance sign-off.`, `Final timeline depends on ${pick(r, ["legal review", "vendor onboarding", "design handoff"])}.`, `One stakeholder requested an additional metrics view.`])}`;
+  }
+  if (kind === "sopGenerator") {
+    return `# Standard Operating Procedure — ${t}\n\n**Owner:** ${audience} · **Version:** 1.0 · **Review:** quarterly\n\n## Purpose\n\nMake ${topic} repeatable by anyone on the team — without tribal knowledge.\n\n## When to use\n\nRun this SOP whenever ${topic} is initiated. Target time: ${pick(r, ["under 30 minutes", "under 1 hour", "half a day"])}.\n\n## Steps\n\n1. **Prepare** — gather inputs and confirm the goal is written down.\n2. **Draft** — produce the first version using the current template.\n3. **Review** — check against the quality bar below.\n4. **Ship** — publish / deliver and notify stakeholders.\n5. **Record** — log what worked and any deviations.\n\n## Quality bar\n\n- [ ] Matches the agreed scope exactly\n- [ ] Passes a fresh-eyes skim (a newcomer can follow it)\n- [ ] Links to sources and related docs\n\n## Tools & templates\n\n- ${pick(r, ["Shared template library", "Checklist app", "Internal wiki page"])}\n\n## Escalation\n\nIf blocked more than ${pick(r, ["30 minutes", "1 hour", "2 hours"])}, flag to the owner rather than guessing.\n\n*Last updated ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.*`;
+  }
+  /* coverLetter */
+  return `Dear ${audience === "the stakeholder" ? "Hiring Manager" : audience},\n\n${pick(r, [
+    `I'm writing because ${topic} is exactly the kind of work I do best — and the kind I'd choose to do every day.`,
+    `When I saw the ${topic} opening, I recognized my own playbook described in your words.`,
+  ])}\n\nThree things I'd bring from day one:\n\n1. **Relevant results.** In my last role I improved ${pick(r, ["output quality", "turnaround time", "stakeholder satisfaction"])} by ${int(r, 18, 45)}% by building a repeatable system — not by working longer hours.\n2. **Ownership.** I default to clarifying goals, shipping early, and over-communicating progress.\n3. **Curiosity.** I treat every project as a chance to document what works and raise the team's floor.\n\nI've attached work I'm proud of, including one piece directly relevant to ${topic}. I'd welcome the chance to walk through it and hear where you're headed.\n\nThank you for your time.\n\nBest regards,\n[Your name]`;
+}
+
+function researchSuite(kind: OutputKind, inputs: Record<string, string>, seed: number): string {
+  const r = rng(seed);
+  const topic = kw(inputs, ["keyword", "topic", "competitor", "query", "subject", "url"], "your topic");
+  const t = topic.charAt(0).toUpperCase() + topic.slice(1);
+
+  if (kind === "questionFinder") {
+    const n = Math.min(Math.max(parseInt(inputs.count || "12", 10) || 12, 6), 20);
+    const stems = ["What is", "How do I", "Why does", "Is", "Can", "How much does", "What are the best", "How long does it take to", "Should I", "What happens if", "How often should you", "What's the difference between"];
+    const tails = [topic, `${topic} for beginners`, `${topic} in ${new Date().getFullYear()}`, `doing ${topic} wrong`, `${topic} worth it`, `${topic} vs alternatives`, `improving ${topic}`, `${topic} on a budget`];
+    const qs: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const q = `${pick(r, stems)} ${pick(r, tails)}?`;
+      if (!qs.includes(q)) qs.push(q);
+    }
+    return `### ${n} real questions people ask about ${topic}\n\n${qs.map((q, i) => `${i + 1}. ${q}  ·  ${pick(r, ["high intent", "top-of-funnel", "comparison", "troubleshooting", "beginner"])}`).join("\n")}\n\n_Tip: each question is a candidate H2, FAQ entry, or short-form video._`;
+  }
+  if (kind === "competitorAnalysis") {
+    const comps = kwList(inputs, ["competitors"]).length ? kwList(inputs, ["competitors"]) : [`Competitor A`, `Competitor B`, `Competitor C`];
+    return `# Competitive analysis — ${t}\n\n## Landscape snapshot\n\n| Competitor | Positioning | Strength | Weakness | Price tier |\n|---|---|---|---|---|\n${comps.slice(0, 5).map(c => `| ${c} | ${pick(r, ["feature-broad", "price-led", "niche expert", "brand-led"])} | ${pick(r, ["distribution", "UX polish", "integrations", "content"])} | ${pick(r, ["slow iteration", "weak onboarding", "pricing opacity", "thin docs"])} | ${pick(r, ["budget", "mid", "premium"])} |`).join("\n")}\n\n## Where they all converge\n\n- Similar core feature set; differentiation happens in onboarding and support.\n- Content marketing is the primary acquisition channel for every player.\n\n## The gap you can own\n\n${pick(r, [
+  `- Nobody publishes original data. One honest benchmark report would earn links and quotes.`,
+  `- Onboarding is the weakest link across the board — a better first-run experience is defensible.`,
+  `- Pricing pages are confusing everywhere; radical clarity is an opening.`,
+])}\n\n## Recommended move\n\nPick one gap, build the answer, and distribute it where their customers already gather.`;
+  }
+  if (kind === "serpAnalysis") {
+    return `# SERP analysis — "${topic}"\n\n**Intent:** ${pick(r, ["informational", "commercial investigation", "transactional"])} · **Difficulty:** ${int(r, 22, 68)}/100\n\n## What currently ranks\n\n${[1, 2, 3, 4, 5].map(i => `${i}. ${pick(r, ["Ultimate guide (2,400 words)", "Listicle (15 items)", "Tool/vendor page", "Comparison post", "Short definition + FAQ"])} — ${pick(r, ["strong backlinks", "fresh content", "exact-match domain", "high brand CTR", "rich snippets"])}`).join("\n")}\n\n## Content angle that wins\n\n- Average winner: ${int(r, 1400, 2600)} words, ${int(r, 2, 6)} months old.\n- Every top result ${pick(r, ["includes original screenshots", "answers PAA boxes early", "has a clear table of contents", "embeds a tool or calculator"])}.\n- Missing: ${pick(r, ["a beginner-friendly path", "current-year data", "an honest limitations section", "a downloadable checklist"])}.\n\n## How to outrank\n\n1. Cover the topic more completely than #1 (use their H2s as your floor).\n2. Add the missing angle above.\n3. Win the PAA boxes with concise 40–60 word answers.\n4. Earn 3–5 relevant internal links on publish day.`;
+  }
+  if (kind === "contentBrief") {
+    return `# Content brief — ${t}\n\n**Goal:** ${pick(r, ["rank for the primary keyword", "convert mid-funnel readers", "build topical authority"])} · **Audience:** ${inputs.audience || "the target reader"} · **Length:** ${int(r, 1400, 2200)} words\n\n## Working title\n\n${pick(r, [`${t}: The Practical Guide (${new Date().getFullYear()})`, `How to ${topic} without wasting a month`, `The honest guide to ${topic}`])}\n\n## Outline\n\n1. **Hook** — name the real pain, promise one specific outcome.\n2. **What it is** — 40–60 word definition (answer-box friendly).\n3. **Why now** — what changed that makes this urgent.\n4. **Step-by-step** — the core walkthrough with examples.\n5. **Mistakes to avoid** — 3 common, 3 fixes.\n6. **Tools & templates** — concrete links.\n7. **FAQ + schema** — 3 questions.\n\n## Must include\n\n- Primary keyword in H1, first 100 words, one H2.\n- At least one original example, number, or screenshot.\n- 2–3 internal links, 1 authoritative external link.\n\n## Success metric\n\n${pick(r, ["Organic clicks within 60 days", "Scroll depth > 60%", "Conversion to signup", "Featured snippet capture"])}`;
+  }
+  if (kind === "schemaGen") {
+    return `### Structured data — ${t}\n\n**Type:** ${pick(r, ["Article", "FAQPage", "HowTo", "Product"])}\n\n\`\`\`json\n{\n  "@context": "https://schema.org",\n  "@type": "Article",\n  "headline": "${t}",\n  "description": "A practical guide to ${topic}.",\n  "author": { "@type": "Person", "name": "${inputs.author || "Your Name"}" },\n  "datePublished": "${new Date().toISOString().slice(0, 10)}",\n  "publisher": { "@type": "Organization", "name": "${inputs.brand || "Your Brand"}" }\n}\n\`\`\`\n\n${pick(r, ["FAQ", "HowTo"])} variant:\n\n\`\`\`json\n{\n  "@context": "https://schema.org",\n  "@type": "${pick(r, ["FAQPage", "HowTo"])}",\n  "mainEntity": [\n    { "@type": "Question", "name": "What is ${topic}?", "acceptedAnswer": { "@type": "Answer", "text": "A clear, one-paragraph definition." } }\n  ]\n}\n\`\`\`\n\n_Validate with Google's Rich Results Test before publishing._`;
+  }
+  if (kind === "topicalMap") {
+    return `# Topical map — ${t}\n\n## Pillar page\n\n**The Complete Guide to ${t}** (2,500+ words) — owns the head term.\n\n## Cluster: Fundamentals\n\n- What is ${topic}? (definition)\n- ${t} vs alternatives\n- ${t} for beginners\n\n## Cluster: How-to\n\n- How to ${topic} step by step\n- ${t} checklist\n- ${t} templates\n\n## Cluster: Comparison & buying\n\n- Best ${topic} tools (${new Date().getFullYear()})\n- ${t} pricing explained\n- Is ${topic} worth it?\n\n## Cluster: Advanced\n\n- ${t} mistakes to avoid\n- ${t} metrics that matter\n- ${t} case study\n\n## Linking strategy\n\nEvery cluster page links up to the pillar; the pillar links out to each cluster once. Add cross-links between siblings where genuinely useful — never force them.`;
+  }
+  /* seoAudit */
+  return `# SEO audit — ${t}\n\n**Overall health:** ${int(r, 52, 86)}/100\n\n## ✅ Working\n\n- Indexable, no blocking robots rules detected.\n- Single H1 and logical heading order.\n- Mobile-friendly layout and readable font sizes.\n\n## ⚠ Fix soon\n\n- Meta description is ${pick(r, ["missing", "too short", "duplicated across pages"])} — rewrite to 120–155 chars.\n- ${int(r, 2, 7)} images lack alt text.\n- ${int(r, 1, 4)} pages load slower than 2.5s LCP.\n- ${int(r, 1, 3)} orphan pages have no internal links pointing in.\n\n## ⛔ Critical\n\n- ${pick(r, ["No XML sitemap submitted", "Missing canonical tags on paginated URLs", "Thin content (<300 words) on key pages"])}.\n\n## 30-day action plan\n\n1. Fix the critical item above (biggest lever).\n2. Rewrite the ${int(r, 3, 8)} weakest meta descriptions.\n3. Add internal links from your top-traffic pages to orphans.\n4. Re-run this audit in 30 days and compare.`;
+}
+
+function marketingSuite(kind: OutputKind, inputs: Record<string, string>, seed: number): string {
+  const r = rng(seed);
+  const topic = kw(inputs, ["brand", "product", "campaign", "industry", "topic", "subject"], "your brand");
+  const audience = inputs.audience || "your ideal customer";
+  const t = topic.charAt(0).toUpperCase() + topic.slice(1);
+
+  if (kind === "persona") {
+    return `# Customer persona — ${t}\n\n## ${pick(r, ["Maya, the Pragmatic Operator", "Daniel, the Ambitious Founder", "Sofia, the Overloaded Marketer"])}\n\n**Age:** ${int(r, 26, 48)} · **Role:** ${pick(r, ["Marketing lead", "Founder", "Operations manager", "Content strategist"])} · **Team size:** ${pick(r, ["solo", "2–10", "11–50"])}\n\n**Goals**\n- Ship consistent, high-quality work without burning out.\n- Prove impact with numbers their boss respects.\n- Reclaim ${int(r, 5, 12)} hours a week from repetitive tasks.\n\n**Frustrations**\n- Too many tools that don't talk to each other.\n- Advice that's generic and impossible to act on.\n- No time to learn another complex platform.\n\n**Objections**\n- "Is this another subscription I'll forget about?"\n- "Will it actually fit how my team works?"\n\n**Where they spend time**\n${pick(r, ["LinkedIn + niche newsletters", "YouTube + podcasts", "Reddit + communities", "X + industry Slack groups"])}\n\n**How ${topic} wins them**\nLead with a concrete time-saved number and a friction-free first run. They buy outcomes, not features.`;
+  }
+  if (kind === "brandVoiceGen") {
+    return `# Brand voice guide — ${t}\n\n## Voice in three words\n\n${pick(r, ["Clear, warm, direct", "Smart, candid, useful", "Calm, confident, specific"])}\n\n## We sound like…\n\n- A sharp colleague who respects your time.\n- Someone who has actually done the work.\n- Specific first, clever second.\n\n## We never sound like…\n\n- A press release.\n- A hype-filled landing page from 2015.\n- Anyone using the word "synergy" unironically.\n\n## Tone by channel\n\n| Channel | Tone |\n|---|---|\n| Website | Confident, benefit-led |\n| Email | Personal, one clear ask |\n| Social | Conversational, proof over polish |\n| Docs | Precise, scannable |\n\n## Vocabulary\n\n**Use:** ${pick(r, ["simple", "system", "ship", "honest", "workflow", "results"])}\n**Avoid:** ${pick(r, ["leverage", "disrupt", "game-changer", "seamless", "unlock"])}\n\n_Save this as your Brand Voice profile — every ChatDeck tool can apply it automatically._`;
+  }
+  if (kind === "ctaGenerator") {
+    const n = Math.min(Math.max(parseInt(inputs.count || "10", 10) || 10, 5), 15);
+    const ctas = [
+      "Start your free trial — no card needed", "See it in action (2-min demo)", "Get the free template",
+      "Book a 15-minute walkthrough", "Try it on your own content", "Join 4,000+ teams already shipping",
+      "Calculate your time savings", "Download the checklist", "See pricing (it's simpler than you think)",
+      "Turn this into a post — free", "Audit my content in 60 seconds", "Claim your 14 days free",
+      "Stop guessing — start measuring", "Make your first draft in 5 minutes", "Yes, show me how",
+    ];
+    return `### ${n} CTAs for ${audience}\n\n${ctas.slice(0, n).map((c, i) => `${i + 1}. **${c}**  ·  ${pick(r, ["low-friction", "value-led", "social-proof", "urgency", "curiosity"])}`).join("\n\n")}\n\n_Rule of thumb: one CTA per screen, verb-first, and make the outcome — not the action — the hero._`;
+  }
+  if (kind === "landingCopy") {
+    return `# Landing page copy — ${t}\n\n## Hero\n\n**H1:** ${pick(r, [
+      `${t}, minus the busywork.`, `Ship ${topic} 4× faster.`, `The ${topic} workflow that finally clicks.`,
+    ])}\n**Sub:** Built for ${audience} who'd rather ship great work than manage tools. Set up in minutes, see results this week.\n**CTA:** Start free — no card required\n**Proof:** ★ 4.8 · Trusted by 4,000+ teams\n\n## Problem → Agitation → Solution\n\n**Problem:** ${topic} eats hours you don't have.\n**Agitation:** And every shortcut so far trades quality for speed.\n**Solution:** ${t} keeps your quality and hands back your hours.\n\n## Three proof points\n\n1. **Fast by default** — first result in under a minute.\n2. **Quality you control** — your voice, your rules.\n3. **Honest limits** — you always know where you stand.\n\n## Social proof\n\n> "It paid for itself in the first week." — ${pick(r, ["Priya, Head of Content", "Marcus, Founder", "Elena, Marketing Lead"])}\n\n## Final CTA\n\n**H2:** Your first draft is 5 minutes away.\n**Button:** Start free trial`;
+  }
+  /* campaignGen */
+  return `# 30-day campaign — ${t}\n\n**Goal:** ${pick(r, ["launch awareness", "trial signups", "re-engagement"])} · **Audience:** ${audience}\n\n## Week 1 — Awareness\n\n- Day 1: Announcement post (hero message + one proof point)\n- Day 3: "Why now" email to list\n- Day 5: Social proof carousel (3 customer quotes)\n\n## Week 2 — Education\n\n- Day 8: How-to thread/video (the core workflow)\n- Day 10: Blog post answering the #1 objection\n- Day 12: Live demo or AMA\n\n## Week 3 — Conversion\n\n- Day 15: Case study with real numbers\n- Day 17: Limited-time onboarding bonus\n- Day 19: "Last call" email (one clear ask)\n\n## Week 4 — Retention & repurpose\n\n- Day 22: Recap + top questions answered\n- Day 24: Repurpose best-performing asset into 3 formats\n- Day 27: Measure, prune, and plan the next cycle\n\n**One rule:** every asset has a single job and a single CTA.`;
+}
+
+/* ---------- brand voice post-processing ---------- */
+export interface BrandVoice {
+  name: string; tone: string; audience: string; industry: string;
+  preferred: string[]; forbidden: string[]; rules: string;
+}
+export function applyBrandVoice(text: string, brand: BrandVoice | null): string {
+  if (!brand) return text;
+  let out = text;
+  for (const bad of brand.forbidden) {
+    if (!bad.trim()) continue;
+    out = out.replace(new RegExp(`\\b${bad.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), "");
+  }
+  out = out.replace(/ {2,}/g, " ").replace(/ ([,.!?;:])/g, "$1");
+  const note = `\n\n---\n*Brand voice applied: ${brand.name} — ${brand.tone || "consistent tone"}${brand.audience ? `, for ${brand.audience}` : ""}.*`;
+  return out + note;
+}
+
+export function generateOutputWithBrand(kind: OutputKind, inputs: Record<string, string>, seed: number, brand: BrandVoice | null): GenResult {
+  const base = generateOutput(kind, inputs, seed);
+  const text = applyBrandVoice(base.text, brand);
   return { text, words: countWords(text) };
 }
 

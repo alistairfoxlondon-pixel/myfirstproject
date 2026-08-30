@@ -9,7 +9,23 @@ export type UserStatus = "active" | "suspended";
 export type Tier = "trial" | "starter" | "pro" | "business" | "enterprise";
 export type PlanStatus = "active" | "archived";
 export type SubStatus = "trialing" | "active" | "canceled" | "expired" | "past_due";
-export type ToolCategory = "writing" | "content" | "seo" | "marketing" | "productivity";
+export type ToolCategory = "writing" | "content" | "seo" | "marketing" | "productivity" | "social" | "business" | "research";
+export type ModelTier = "economy" | "balanced" | "flagship";
+
+export interface AiModel {
+  id: string; provider: string; name: string; tier: ModelTier;
+  costInPer1k: number; costOutPer1k: number; // USD per 1k tokens
+  maxOutputTokens: number; enabled: boolean; priority: number; // lower = preferred
+  fallbackId: string | null;
+}
+export interface BrandVoice {
+  id: string; userId: string; name: string; tone: string; audience: string; industry: string;
+  preferred: string; forbidden: string; rules: string; active: boolean; createdAt: string;
+}
+export interface SocialPost {
+  id: string; userId: string; platform: string; text: string; status: "draft" | "scheduled" | "published" | "failed";
+  scheduledFor: string; sourceDocId: string | null; createdAt: string;
+}
 
 export interface User {
   id: string; name: string; email: string; passHash: string;
@@ -29,6 +45,7 @@ export interface ToolField {
 export interface Tool {
   id: string; slug: string; name: string; tagline: string; category: ToolCategory;
   icon: string; outputKind: string; minTier: Tier; dailyCap: number; // 0 = no cap
+  modelTier: ModelTier; // which model class routes this tool (cost control)
   fields: ToolField[]; active: boolean; uses: number; createdAt: string;
 }
 export interface Subscription {
@@ -39,7 +56,8 @@ export interface Subscription {
 export interface Generation {
   id: string; userId: string; toolSlug: string; toolName: string;
   inputs: Record<string, string>; output: string; words: number; chars: number;
-  status: "completed" | "failed"; model: string; provider: string; createdAt: string; durationMs: number;
+  status: "completed" | "failed"; model: string; provider: string; modelTier: ModelTier;
+  estCostUsd: number; createdAt: string; durationMs: number;
 }
 export interface Usage {
   userId: string; month: string; wordsUsed: number; generationsUsed: number;
@@ -72,7 +90,8 @@ export interface DB {
   version: number;
   users: User[]; plans: Plan[]; tools: Tool[]; subscriptions: Subscription[];
   generations: Generation[]; usage: Usage[]; invoices: Invoice[]; activity: Activity[];
-  posts: Post[]; settings: Settings; seq: number;
+  posts: Post[]; models: AiModel[]; brandVoices: BrandVoice[]; socialPosts: SocialPost[];
+  settings: Settings; seq: number;
 }
 
 /* ================= helpers ================= */
@@ -101,7 +120,7 @@ const SAMPLE_TEXT = [
 ];
 
 /* ================= seed ================= */
-const SEED_VERSION = 8;
+const SEED_VERSION = 9;
 
 function seedTools(): Tool[] {
   const tone = { key: "tone", label: "Tone of voice", type: "select" as const, options: TONES, default: "professional" };
@@ -110,8 +129,8 @@ function seedTools(): Tool[] {
   const audience = { key: "audience", label: "Target audience", type: "text" as const, placeholder: "e.g. SaaS founders, busy marketers…" };
   const count = (d = 8) => ({ key: "count", label: "How many?", type: "number" as const, default: String(d), min: 3, max: 15 });
   const topic = (ph: string) => ({ key: "topic", label: "Topic", type: "text" as const, placeholder: ph, required: true });
-  const mk = (slug: string, name: string, tagline: string, category: ToolCategory, icon: string, outputKind: string, minTier: Tier, dailyCap: number, fields: ToolField[]): Tool =>
-    ({ id: "tool_" + slug, slug, name, tagline, category, icon, outputKind, minTier, dailyCap, fields, active: true, uses: 0, createdAt: daysAgoISO(120) });
+  const mk = (slug: string, name: string, tagline: string, category: ToolCategory, icon: string, outputKind: string, minTier: Tier, dailyCap: number, fields: ToolField[], modelTier: ModelTier = "economy"): Tool =>
+    ({ id: "tool_" + slug, slug, name, tagline, category, icon, outputKind, minTier, dailyCap, modelTier, fields, active: true, uses: 0, createdAt: daysAgoISO(120) });
 
   return [
     mk("content-writer", "AI Content Writer", "Long-form content from a topic and a few keywords.", "content", "pen", "article", "trial", 20, [
@@ -335,10 +354,13 @@ function seedGenerations(users: User[], tools: Tool[]): Generation[] {
       const base = GEN_TOPICS[tool.slug] || { topic: TOPICS[int(r, 0, TOPICS.length - 1)] };
       const inputs = { ...base, tone: base.tone || TONES[int(r, 0, TONES.length - 1)] };
       const res = generateOutput(tool.outputKind as never, inputs, hashStr(email + tool.slug + i));
+      const tier = tool.modelTier || "economy";
       out.push({
         id: "gen_" + uid(), userId: user.id, toolSlug: tool.slug, toolName: tool.name,
         inputs, output: res.text, words: res.words, chars: res.text.length,
-        status: "completed", model: "gpt-4.1-mini", provider: "openai",
+        status: "completed", model: tier === "flagship" ? "gpt-4.1" : tier === "balanced" ? "gpt-4.1-mini" : "gpt-4.1-nano",
+        provider: "openai", modelTier: tier,
+        estCostUsd: Math.round((res.words / 1000) * (tier === "flagship" ? 0.008 : tier === "balanced" ? 0.0016 : 0.0004) * 100000) / 100000,
         createdAt: daysAgoISO(day, 8 + (i % 10)), durationMs: 600 + int(r, 0, 1800),
       });
     }
@@ -392,6 +414,58 @@ function seedActivity(): Activity[] {
   ];
 }
 
+function seedModels(): AiModel[] {
+  const m = (provider: string, name: string, tier: ModelTier, costInPer1k: number, costOutPer1k: number, maxOutputTokens: number, priority: number, fallbackId: string | null): AiModel =>
+    ({ id: "model_" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), provider, name, tier, costInPer1k, costOutPer1k, maxOutputTokens, enabled: true, priority, fallbackId });
+  return [
+    m("openai", "gpt-4.1-nano", "economy", 0.0001, 0.0004, 2048, 1, "model_claude-haiku"),
+    m("anthropic", "claude-haiku", "economy", 0.00025, 0.00125, 2048, 2, null),
+    m("openai", "gpt-4.1-mini", "balanced", 0.0004, 0.0016, 4096, 1, "model_claude-sonnet"),
+    m("anthropic", "claude-sonnet", "balanced", 0.003, 0.015, 4096, 2, null),
+    m("google", "gemini-flash", "balanced", 0.0003, 0.0012, 4096, 3, null),
+    m("openai", "gpt-4.1", "flagship", 0.002, 0.008, 8192, 1, "model_claude-opus"),
+    m("anthropic", "claude-opus", "flagship", 0.015, 0.075, 8192, 2, null),
+  ];
+}
+
+function seedExpansionTools(): Tool[] {
+  const mk = (slug: string, name: string, tagline: string, category: ToolCategory, icon: string, outputKind: string, minTier: Tier, dailyCap: number, fields: ToolField[], modelTier: ModelTier): Tool =>
+    ({ id: "tool_" + slug, slug, name, tagline, category, icon, outputKind, minTier, dailyCap, modelTier, fields, active: true, uses: 0, createdAt: daysAgoISO(2) });
+  const tone = { key: "tone", label: "Tone of voice", type: "select" as const, options: TONES, default: "professional" };
+  const audience = { key: "audience", label: "Target audience", type: "text" as const, placeholder: "e.g. SaaS founders…" };
+  const count = (d = 8) => ({ key: "count", label: "How many?", type: "number" as const, default: String(d), min: 3, max: 15 });
+  const topic = (ph: string, key = "topic") => ({ key, label: "Topic", type: "text" as const, placeholder: ph, required: true });
+
+  return [
+    /* social suite */
+    mk("linkedin-post", "LinkedIn Post Generator", "Professional posts that earn saves, not just likes.", "social", "linkedin", "linkedin", "trial", 30, [topic("e.g. what we learned rebuilding our onboarding"), audience, tone], "economy"),
+    mk("x-thread", "X Thread Generator", "Scroll-stopping threads with a strong hook.", "social", "twitter", "xthread", "trial", 30, [topic("e.g. content repurposing systems"), { key: "posts", label: "Thread length", type: "number" as const, default: "6", min: 4, max: 10 }], "economy"),
+    mk("ig-caption", "Instagram Caption Generator", "Captions with hooks, value and clean hashtags.", "social", "instagram", "igcaption", "trial", 30, [topic("e.g. morning routines that stick"), audience, { key: "hashtags", label: "Hashtags?", type: "select" as const, options: ["yes", "no"], default: "yes" }], "economy"),
+    mk("yt-description", "YouTube Description Generator", "Chapters, resources and SEO-ready descriptions.", "social", "youtube", "ytDescription", "starter", 25, [topic("e.g. my honest review of the new workflow", "video")], "economy"),
+    mk("social-hooks", "Social Hook Generator", "First-line hooks that stop the scroll.", "social", "zap", "socialHook", "trial", 40, [topic("e.g. pricing experiments"), count(8)], "economy"),
+    /* business suite */
+    mk("proposal-writer", "Proposal Writer", "Scoped, priced proposals you can send today.", "business", "briefcase", "proposal", "pro", 10, [{ key: "project", label: "Project / service", type: "text" as const, required: true, placeholder: "e.g. SEO retainer for a DTC brand" }, { key: "client", label: "Client", type: "text" as const }], "balanced"),
+    mk("job-description", "Job Description Generator", "Role posts that attract the right people.", "business", "userPlus", "jobDescription", "starter", 15, [{ key: "role", label: "Role title", type: "text" as const, required: true, placeholder: "e.g. Content Strategist" }, { key: "location", label: "Location", type: "text" as const, default: "Remote" }], "balanced"),
+    mk("meeting-actions", "Meeting Action Items", "Notes → decisions, owners and due dates.", "business", "clipboardList", "meetingActions", "trial", 30, [{ key: "meeting", label: "Meeting topic", type: "text" as const, required: true }, { key: "notes", label: "Raw notes (one per line)", type: "textarea" as const, rows: 5 }], "economy"),
+    mk("sop-generator", "SOP Generator", "Repeatable procedures anyone can follow.", "business", "listChecks", "sopGenerator", "pro", 12, [{ key: "process", label: "Process name", type: "text" as const, required: true, placeholder: "e.g. weekly content publish" }, audience], "balanced"),
+    mk("cover-letter", "Cover Letter Generator", "Specific, human cover letters in seconds.", "business", "fileSignature", "coverLetter", "trial", 20, [{ key: "topic", label: "Target role", type: "text" as const, required: true, placeholder: "e.g. Product Marketing Manager" }, { key: "company", label: "Company", type: "text" as const }], "economy"),
+    /* research & SEO suite */
+    mk("question-finder", "Question Finder", "The real questions your audience searches.", "research", "helpCircle", "questionFinder", "trial", 30, [{ key: "keyword", label: "Seed keyword", type: "text" as const, required: true, placeholder: "e.g. email marketing" }, count(12)], "economy"),
+    mk("competitor-analysis", "Competitor Analysis", "Positioning, gaps and your opening move.", "research", "scale", "competitorAnalysis", "pro", 10, [{ key: "topic", label: "Market / category", type: "text" as const, required: true }, { key: "competitors", label: "Competitors (comma separated)", type: "text" as const }], "flagship"),
+    mk("serp-analysis", "SERP Analysis", "What ranks, what's missing, how to win.", "seo", "barChart", "serpAnalysis", "pro", 12, [{ key: "keyword", label: "Keyword", type: "text" as const, required: true, placeholder: "e.g. ai writing tools" }], "flagship"),
+    mk("content-brief", "Content Brief Generator", "Briefs writers can execute without guessing.", "research", "fileText", "contentBrief", "starter", 15, [{ key: "topic", label: "Topic", type: "text" as const, required: true }, audience], "balanced"),
+    mk("schema-generator", "Schema Markup Generator", "Copy-paste JSON-LD for rich results.", "seo", "code", "schemaGen", "starter", 20, [{ key: "topic", label: "Page subject", type: "text" as const, required: true }, { key: "author", label: "Author", type: "text" as const }, { key: "brand", label: "Brand", type: "text" as const }], "economy"),
+    mk("topical-map", "Topical Map Generator", "Pillar + cluster architecture for authority.", "seo", "network", "topicalMap", "pro", 10, [{ key: "topic", label: "Core topic", type: "text" as const, required: true, placeholder: "e.g. sustainable packaging" }], "flagship"),
+    mk("seo-audit", "SEO Page Audit", "A prioritized fix list, not a wall of data.", "seo", "shieldCheck", "seoAudit", "pro", 10, [{ key: "url", label: "Page URL or title", type: "text" as const, required: true, placeholder: "e.g. /blog/pricing-guide" }], "flagship"),
+    /* marketing suite */
+    mk("persona-generator", "Customer Persona Generator", "Personas with goals, objections and channels.", "marketing", "users", "persona", "starter", 15, [{ key: "brand", label: "Product / brand", type: "text" as const, required: true }, audience], "balanced"),
+    mk("brand-voice", "Brand Voice Generator", "A reusable voice guide your whole team follows.", "marketing", "mic", "brandVoiceGen", "starter", 12, [{ key: "brand", label: "Brand name", type: "text" as const, required: true }, { key: "industry", label: "Industry", type: "text" as const }], "balanced"),
+    mk("cta-generator", "CTA Generator", "Calls to action that get clicked.", "marketing", "mousePointer", "ctaGenerator", "trial", 30, [{ key: "topic", label: "What are you promoting?", type: "text" as const, required: true }, audience, count(10)], "economy"),
+    mk("landing-copy", "Landing Page Copy", "Hero → proof → CTA, written for conversion.", "marketing", "layoutTemplate", "landingCopy", "pro", 10, [{ key: "product", label: "Product", type: "text" as const, required: true }, audience], "flagship"),
+    mk("campaign-generator", "Marketing Campaign Generator", "A 30-day, multi-channel campaign plan.", "marketing", "megaphone", "campaignGen", "pro", 8, [{ key: "campaign", label: "Campaign goal / product", type: "text" as const, required: true }, audience], "flagship"),
+  ];
+}
+
 function seedPosts(): Post[] {
   const p = (slug: string, title: string, category: string, tags: string[], status: Post["status"], ago: number, style: string, excerpt: string, body: string): Post => ({
     id: "post_" + slug, slug, title, excerpt, body, category, tags, author: "Amara Fields",
@@ -438,7 +512,7 @@ const DEFAULT_SECTIONS = [
 ];
 
 export function freshDb(): DB {
-  const tools = seedTools();
+  const tools = [...seedTools(), ...seedExpansionTools()];
   const plans = seedPlans();
   const users = seedUsers();
   const generations = seedGenerations(users, tools);
@@ -451,6 +525,9 @@ export function freshDb(): DB {
     invoices: seedInvoices(users),
     activity: seedActivity(),
     posts: seedPosts(),
+    models: seedModels(),
+    brandVoices: [],
+    socialPosts: [],
     settings: {
       site: { name: "ChatDeck", tagline: "The AI writing studio for teams that ship.", description: "25+ AI writing, SEO and marketing tools with flexible plans and a dashboard built for speed.", supportEmail: "support@chatdeck.ai", twitter: "https://twitter.com/chatdeck", github: "https://github.com/chatdeck", linkedin: "https://linkedin.com/company/chatdeck" },
       registration: { enabled: true, requireVerification: false },

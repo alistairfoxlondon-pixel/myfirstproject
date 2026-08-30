@@ -4,10 +4,38 @@
    subscription state, plan permissions, usage and rate limits. */
 import {
   DB, User, Plan, Tool, Subscription, Generation, Usage, Invoice, Settings, Post,
+  AiModel, ModelTier, BrandVoice as DbBrandVoice, SocialPost,
   getDb, mutate, uid, nowISO, daysAheadISO, monthKey, dayKey, hash, tierRank,
   setSession, getSessionUserId, freshDb, saveDb, countWords,
 } from "./db";
-import { generateOutput, hashStr, studioTransform, AssistAction } from "./ai";
+import { generateOutput, generateOutputWithBrand, hashStr, studioTransform, AssistAction, BrandVoice } from "./ai";
+
+/* ---------- AI model routing (cost-aware, with fallback) ---------- */
+function routeModel(db: DB, tier: ModelTier): AiModel | null {
+  const enabled = db.models.filter(m => m.enabled && m.tier === tier);
+  const byPriority = enabled.slice().sort((a, b) => a.priority - b.priority || a.costOutPer1k - b.costOutPer1k);
+  if (!byPriority.length) return null;
+  /* walk the fallback chain from the top pick; fall back to cheapest enabled model */
+  let current: AiModel | undefined = byPriority[0];
+  const seen = new Set<string>();
+  while (current && !current.enabled && current.fallbackId && !seen.has(current.id)) {
+    seen.add(current.id);
+    current = db.models.find(m => m.id === current!.fallbackId);
+  }
+  return current && current.enabled ? current : byPriority[0];
+}
+
+/* ---------- brand voice resolution ---------- */
+function resolveBrand(userId: string): BrandVoice | null {
+  const bv = getDb().brandVoices.find(b => b.userId === userId && b.active);
+  if (!bv) return null;
+  return {
+    name: bv.name, tone: bv.tone, audience: bv.audience, industry: bv.industry,
+    preferred: bv.preferred.split(",").map(s => s.trim()).filter(Boolean),
+    forbidden: bv.forbidden.split(",").map(s => s.trim()).filter(Boolean),
+    rules: bv.rules,
+  };
+}
 
 export class ApiError extends Error {
   code: string;
@@ -236,9 +264,19 @@ export async function generate(user: User, toolSlug: string, inputs: Record<stri
   await sleep(650 + Math.random() * 700); // provider round-trip
   const db = getDb();
   const seed = hashStr(JSON.stringify(inputs) + Date.now());
-  const res = generateOutput(tool.outputKind as never, inputs, seed);
+  /* model routing: pick the best enabled model for this tool's tier, cost-aware */
+  const routed = routeModel(db, tool.modelTier || "economy");
+  /* brand voice: apply the user's active profile, if any */
+  const brand = resolveBrand(user.id);
+  const res = generateOutputWithBrand(tool.outputKind as never, inputs, seed, brand);
   const output = res.text.slice(0, db.settings.usage.maxOutputWords * 8);
   const words = countWords(output);
+  /* cost estimate from the routed model's published rates */
+  const inTokens = Math.ceil((JSON.stringify(inputs).length / 4));
+  const outTokens = Math.ceil(words * 1.3);
+  const estCostUsd = routed
+    ? Math.round((inTokens / 1000 * routed.costInPer1k + outTokens / 1000 * routed.costOutPer1k) * 100000) / 100000
+    : 0;
 
   return mutate(d => {
     // Re-check limits inside the mutation (server-side, atomic).
@@ -247,7 +285,9 @@ export async function generate(user: User, toolSlug: string, inputs: Record<stri
     const gen: Generation = {
       id: "gen_" + uid(), userId: user.id, toolSlug: tool.slug, toolName: tool.name,
       inputs, output, words, chars: output.length, status: "completed",
-      model: d.settings.ai.model, provider: d.settings.ai.provider,
+      model: routed ? routed.name : d.settings.ai.model,
+      provider: routed ? routed.provider : d.settings.ai.provider,
+      modelTier: tool.modelTier || "economy", estCostUsd,
       createdAt: nowISO(), durationMs: Date.now() - started,
     };
     d.generations.unshift(gen);
@@ -579,6 +619,92 @@ export async function runStudioAssist(user: User, action: AssistAction, text: st
     u.byTool["studio-assist"] = (u.byTool["studio-assist"] || 0) + 1;
   });
   return { text: out, words };
+}
+
+/* ================= brand voices ================= */
+export function listBrandVoices(userId: string): DbBrandVoice[] {
+  return getDb().brandVoices.filter(b => b.userId === userId);
+}
+export function saveBrandVoice(user: User, bv: Omit<DbBrandVoice, "id" | "userId" | "createdAt"> & { id?: string }): DbBrandVoice {
+  if (!bv.name.trim()) throw new ApiError("VALIDATION", "Give the voice a name.");
+  return mutate(d => {
+    if (bv.active) d.brandVoices.forEach(b => { if (b.userId === user.id) b.active = false; });
+    if (bv.id) {
+      const existing = d.brandVoices.find(b => b.id === bv.id && b.userId === user.id);
+      if (!existing) throw new ApiError("FORBIDDEN", "Brand voice not found.");
+      Object.assign(existing, bv);
+      return existing;
+    }
+    const rec: DbBrandVoice = { ...bv, id: "bv_" + uid(), userId: user.id, createdAt: nowISO() };
+    d.brandVoices.push(rec);
+    log(d, user.name, "user", "brand.saved", `${user.name} saved brand voice "${rec.name}"`);
+    return rec;
+  });
+}
+export function deleteBrandVoice(user: User, id: string): void {
+  mutate(d => { d.brandVoices = d.brandVoices.filter(b => !(b.id === id && b.userId === user.id)); });
+}
+
+/* ================= social posts (queue / calendar) ================= */
+export function listSocialPosts(userId: string): SocialPost[] {
+  return getDb().socialPosts.filter(s => s.userId === userId).sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
+}
+export function saveSocialPost(user: User, sp: Omit<SocialPost, "id" | "userId" | "createdAt"> & { id?: string }): SocialPost {
+  if (!sp.text.trim()) throw new ApiError("VALIDATION", "The post needs some content.");
+  return mutate(d => {
+    if (sp.id) {
+      const existing = d.socialPosts.find(s => s.id === sp.id && s.userId === user.id);
+      if (!existing) throw new ApiError("FORBIDDEN", "Post not found.");
+      Object.assign(existing, sp);
+      return existing;
+    }
+    const rec: SocialPost = { ...sp, id: "sp_" + uid(), userId: user.id, createdAt: nowISO() };
+    d.socialPosts.push(rec);
+    return rec;
+  });
+}
+export function deleteSocialPost(user: User, id: string): void {
+  mutate(d => { d.socialPosts = d.socialPosts.filter(s => !(s.id === id && s.userId === user.id)); });
+}
+
+/* ================= admin: AI models & cost ================= */
+export const adminListModels = (admin: User | null): AiModel[] => { requireAdmin(admin); return getDb().models.slice().sort((a, b) => a.tier.localeCompare(b.tier) || a.priority - b.priority); };
+export function adminSaveModel(admin: User, m: AiModel): void {
+  requireAdmin(admin);
+  if (!m.name.trim()) throw new ApiError("VALIDATION", "Model needs a name.");
+  mutate(d => {
+    const idx = d.models.findIndex(x => x.id === m.id);
+    if (idx >= 0) d.models[idx] = m; else d.models.push({ ...m, id: "model_" + uid() });
+    log(d, admin.name, "admin", "model.saved", `${admin.name} saved AI model "${m.name}" (${m.tier})`);
+  });
+}
+export function adminToggleModel(admin: User, id: string, enabled: boolean): void {
+  requireAdmin(admin);
+  mutate(d => { const m = d.models.find(x => x.id === id); if (m) m.enabled = enabled; });
+}
+
+/* Cost rollups for the admin dashboard */
+export function adminCostStats(admin: User | null) {
+  requireAdmin(admin);
+  const db = getDb();
+  const byModel = new Map<string, { model: string; gens: number; cost: number }>();
+  const byTool = new Map<string, { tool: string; gens: number; cost: number }>();
+  let totalCost = 0, totalGens = db.generations.length;
+  for (const g of db.generations) {
+    totalCost += g.estCostUsd || 0;
+    const mk = g.model || "unknown";
+    const bm = byModel.get(mk) || { model: mk, gens: 0, cost: 0 };
+    bm.gens++; bm.cost += g.estCostUsd || 0; byModel.set(mk, bm);
+    const tk = g.toolName || g.toolSlug;
+    const bt = byTool.get(tk) || { tool: tk, gens: 0, cost: 0 };
+    bt.gens++; bt.cost += g.estCostUsd || 0; byTool.set(tk, bt);
+  }
+  return {
+    totalCost: Math.round(totalCost * 10000) / 10000, totalGens,
+    avgCostPerGen: totalGens ? Math.round((totalCost / totalGens) * 100000) / 100000 : 0,
+    byModel: [...byModel.values()].sort((a, b) => b.cost - a.cost).slice(0, 8),
+    byTool: [...byTool.values()].sort((a, b) => b.cost - a.cost).slice(0, 8),
+  };
 }
 
 /* ================= formatting helpers ================= */
