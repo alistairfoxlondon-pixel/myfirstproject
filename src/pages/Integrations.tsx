@@ -30,7 +30,11 @@ export default function IntegrationsPage() {
 
   const openConnect = (c: Connector) => {
     const existing = connected.find(i => i.connector === c.id);
-    setForm(existing ? { ...existing.masked } : Object.fromEntries(c.fields.map(f => [f.key, ""])));
+    /* never prefill secrets — blank means "keep the stored credential" */
+    setForm(Object.fromEntries(c.fields.map(f => {
+      if (f.type === "secret") return [f.key, ""];
+      return [f.key, existing?.masked[f.key] || ""];
+    })));
     setErrs({}); setTestResult(null);
     setConnecting(c);
   };
@@ -147,13 +151,17 @@ export default function IntegrationsPage() {
           <div className="space-y-4">
             <p className="text-[12.5px] text-muted-foreground leading-relaxed">{connecting.blurb} <span className="font-mono text-[11px]">{connecting.docs}</span></p>
             {errs._ && <div className="rounded-lg border border-destructive/30 bg-destructive/8 text-destructive text-[13px] px-3.5 py-2.5">{errs._}</div>}
-            {connecting.fields.map(f => (
-              <Field key={f.key} label={f.label} required error={errs[f.key]} help={f.help}>
-                <Input type={f.type === "secret" ? "password" : f.type === "url" ? "url" : "text"} value={form[f.key] || ""}
-                  onChange={e => setForm(s => ({ ...s, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                  autoComplete="off" className={cn(f.type === "secret" && "font-mono")} />
-              </Field>
-            ))}
+            {connecting.fields.map(f => {
+              const hasStored = f.type === "secret" && !!connected.find(i => i.connector === connecting.id);
+              return (
+                <Field key={f.key} label={f.label} required={!hasStored} error={errs[f.key]}
+                  help={hasStored ? (f.help ? f.help + " " : "") + "Leave blank to keep the current value." : f.help}>
+                  <Input type={f.type === "secret" ? "password" : f.type === "url" ? "url" : "text"} value={form[f.key] || ""}
+                    onChange={e => setForm(s => ({ ...s, [f.key]: e.target.value }))} placeholder={hasStored ? "••••••••••••" : f.placeholder}
+                    autoComplete="off" className={cn(f.type === "secret" && "font-mono")} />
+                </Field>
+              );
+            })}
           </div>
         )}
       </Modal>

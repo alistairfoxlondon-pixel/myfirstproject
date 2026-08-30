@@ -305,6 +305,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   word-break: break-word;
 }
 .prose-doc pre { white-space: pre-wrap; overflow-wrap: break-word; }
+
+/* Systemic guard: decorative absolute layers (hero floats, marquees) must
+   never produce page-level horizontal scroll at any viewport width.
+   `clip` (not `hidden`) avoids creating a new scroll container. */
+html, body { overflow-x: clip; }
 .prose-doc:empty::before {
   content: attr(data-placeholder);
   color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);

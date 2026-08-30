@@ -73,7 +73,10 @@ export function ToolsPage() {
           {list.map(t => {
             const open = unlocked(t);
             return (
-              <Card key={t.id} onClick={() => nav(`/app/tools/${t.slug}`)} className="p-4 hover:border-foreground/30 hover:shadow-sm transition-all group relative">
+              <Card key={t.id} role="button" tabIndex={0} aria-label={`Open ${t.name}`}
+                onClick={() => nav(`/app/tools/${t.slug}`)}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); nav(`/app/tools/${t.slug}`); } }}
+                className="p-4 hover:border-foreground/30 hover:shadow-sm transition-all group relative cursor-pointer">
                 <div className="flex items-start justify-between gap-2">
                   <span className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-foreground group-hover:bg-foreground group-hover:text-background transition-colors">
                     <ToolIcon name={t.icon} className="w-[18px] h-[18px]" />

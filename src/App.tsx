@@ -130,6 +130,31 @@ function NotFound() {
   );
 }
 
+/* Catches render errors in any page so one bad view can never blank the whole app */
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error("[ChatDeck] page error:", error); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen flex items-center justify-center px-4">
+          <div className="max-w-md w-full text-center">
+            <p className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted-foreground">runtime error</p>
+            <h1 className="font-display text-[26px] font-extrabold tracking-tight mt-3">Something went wrong on this page</h1>
+            <p className="text-[13.5px] text-muted-foreground mt-3 leading-relaxed">Your documents and account data are safe. Reload to continue where you left off.</p>
+            <div className="flex justify-center gap-3 mt-7">
+              <Button onClick={() => window.location.reload()}>Reload page</Button>
+              <Button variant="outline" onClick={() => { this.setState({ error: null }); window.location.hash = "#/"; }}>Go home</Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function Shell() {
   const loc = useLocation();
   const adminRoute = loc.pathname.startsWith("/admin");
@@ -138,6 +163,7 @@ function Shell() {
       <ScrollToTop />
       <PageMeta />
       <RedirectGate />
+      <ErrorBoundary>
       <Suspense fallback={<LazyFallback />}>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -165,6 +191,7 @@ function Shell() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
       <ToastHost />
     </div>
   );

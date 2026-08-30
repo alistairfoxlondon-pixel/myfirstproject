@@ -56,9 +56,9 @@ export function Badge({ tone = "default", className = "", children }: { tone?: "
 }
 
 /* ---------- Card ---------- */
-export function Card({ className = "", children, onClick }: { className?: string; children: React.ReactNode; onClick?: () => void }) {
+export function Card({ className = "", children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div onClick={onClick} className={cn("rounded-xl border border-border bg-card text-card-foreground", onClick && "cursor-pointer", className)}>
+    <div {...rest} className={cn("rounded-lg border border-border bg-card text-card-foreground", rest.onClick && "cursor-pointer", className)}>
       {children}
     </div>
   );

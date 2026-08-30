@@ -335,8 +335,11 @@ export function listIntegrations(userId: string): (UserIntegration & { name: str
 export function connectIntegration(userId: string, connectorId: string, config: Record<string, string>): UserIntegration {
   const conn = CONNECTORS.find(c => c.id === connectorId);
   if (!conn) throw new ApiError("NOT_FOUND", "Unknown integration.");
+  const existing = getStore().integrations.find(i => i.userId === userId && i.connector === connectorId);
   for (const f of conn.fields) {
     const v = (config[f.key] || "").trim();
+    /* empty secret on update = keep the stored credential (never clobber with a mask) */
+    if (!v && f.type === "secret" && existing?.config[f.key]) continue;
     if (!v) throw new ApiError("VALIDATION", `${f.label} is required.`);
     if (f.type === "url" && !/^https?:\/\/[^\s]+\.[^\s]+/.test(v)) throw new ApiError("VALIDATION", `${f.label} must be a valid https URL.`);
     if (f.type === "secret" && v.length < 8) throw new ApiError("VALIDATION", `${f.label} looks too short.`);
@@ -345,7 +348,12 @@ export function connectIntegration(userId: string, connectorId: string, config: 
     s.integrations = s.integrations.filter(i => !(i.userId === userId && i.connector === connectorId));
     const rec: UserIntegration = {
       id: "int_" + uid(), userId, connector: connectorId,
-      config: Object.fromEntries(Object.entries(config).map(([k, v]) => [k, pack(v.trim())])),
+      config: Object.fromEntries(conn.fields.map(f => {
+        const v = (config[f.key] || "").trim();
+        /* carry the previously stored (packed) secret forward when the field is left blank */
+        if (!v && f.type === "secret" && existing?.config[f.key]) return [f.key, existing.config[f.key]];
+        return [f.key, pack(v)];
+      })),
       connectedAt: nowISO(),
     };
     s.integrations.push(rec);

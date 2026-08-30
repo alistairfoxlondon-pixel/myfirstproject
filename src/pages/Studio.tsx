@@ -218,6 +218,14 @@ export function StudioPage() {
   const [selBusy, setSelBusy] = useState<string | null>(null);
   const [toneOpen, setToneOpen] = useState(false);
 
+  /* the toolbar is positioned from a viewport rect — dismiss it on scroll so it never floats stale */
+  useEffect(() => {
+    if (!sel) return;
+    const onScroll = () => setSel(null);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [sel]);
+
   const runSel = async (action: AssistAction, tone = "professional") => {
     if (!user || !sel) return;
     setSelBusy(action + tone);

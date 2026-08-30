@@ -11,13 +11,15 @@ import type { Post } from "../lib/db";
 
 const readMin = (body: string) => Math.max(1, Math.round(countWords(body) / 220));
 
-function Cover({ post, height = 190, className = "" }: { post: Post; height?: number; className?: string }) {
+function Cover({ post, height, className = "" }: { post: Post; height?: number; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (ref.current && post.cover) renderImage(ref.current, { prompt: post.cover.prompt, seed: post.cover.seed, style: post.cover.style as ArtStyle }, 760, 400);
   }, [post.id, post.cover]);
-  if (!post.cover) return <div className={cn("bg-muted flex items-center justify-center", className)} style={{ height }}><span className="font-mono text-[11px] text-muted-foreground">no cover</span></div>;
-  return <canvas ref={ref} role="img" aria-label={post.cover.alt} className={cn("w-full object-cover", className)} style={{ height }} />;
+  /* inline height only as a fallback — explicit Tailwind classes win when provided */
+  const style = height && !/h-\[|h-full/.test(className) ? { height } : undefined;
+  if (!post.cover) return <div className={cn("bg-muted flex items-center justify-center", className)} style={style}><span className="font-mono text-[11px] text-muted-foreground">no cover</span></div>;
+  return <canvas ref={ref} role="img" aria-label={post.cover.alt} className={cn("w-full object-cover", className)} style={style} />;
 }
 
 function PostMeta({ post }: { post: Post }) {
@@ -82,7 +84,7 @@ export function BlogListPage() {
             {featured && (
               <Reveal>
                 <button onClick={() => nav(`/blog/${featured.slug}`)} className="group w-full text-left grid md:grid-cols-[1.1fr_1fr] rounded-xl border border-border bg-card overflow-hidden transition-all duration-300 hover:border-foreground/35 hover:shadow-lg">
-                  <div className="overflow-hidden"><Cover post={featured} height={260} className="h-[200px] md:h-full transition-transform duration-500 group-hover:scale-[1.03]" /></div>
+                  <div className="overflow-hidden"><Cover post={featured} className="h-[200px] md:h-full transition-transform duration-500 group-hover:scale-[1.03]" /></div>
                   <div className="p-6 md:p-8 flex flex-col">
                     <div className="flex items-center gap-2">
                       <Badge tone="muted" className="font-mono">{featured.category}</Badge>
@@ -171,7 +173,7 @@ export function BlogPostPage() {
 
         {post.cover && (
           <div className="rounded-xl overflow-hidden border border-border my-8">
-            <Cover post={post} height={340} className="h-[220px] sm:h-[340px]" />
+            <Cover post={post} className="h-[220px] sm:h-[340px]" />
           </div>
         )}
 
