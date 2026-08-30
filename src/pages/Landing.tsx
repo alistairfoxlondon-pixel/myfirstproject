@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowUpRight, ChevronDown, ShieldCheck, Gauge, History, LayoutDashboard, Users, ServerCog, Star, Zap, Play } from "lucide-react";
+import { ArrowRight, ArrowUpRight, ChevronDown, ShieldCheck, Gauge, History, LayoutDashboard, Users, ServerCog, Star, Zap, Play, Check } from "lucide-react";
 import { PublicLayout, LogoMarquee, SectionHead } from "../components/site";
-import { Logo, ToolIcon, CATEGORY_META } from "../components/icons";
+import { ToolIcon, CATEGORY_META } from "../components/icons";
 import { Badge, Button, Card, CountUp, Reveal, cn } from "../components/ui";
-import { getDb, tierRank } from "../lib/db";
+import { getDb } from "../lib/db";
 import { getSettings } from "../lib/services";
 import { useApp } from "../lib/app";
 
@@ -81,45 +81,45 @@ function HeroDeck() {
 }
 
 /* ================= pricing ================= */
-export function PricingSection({ compact = false }: { compact?: boolean }) {
+export function PricingSection() {
   const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
   const db = getDb();
   const plans = db.plans.filter(p => p.active && !p.isTrial).sort((a, b) => a.sort - b.sort);
   const nav = useNavigate();
   const { user } = useApp();
   const ctaTarget = () => nav(user ? "/app/billing" : "/register");
+
   return (
     <div>
       <div className="flex items-center justify-center gap-3 mb-10">
         <span className={cn("text-[13.5px] font-medium transition-colors", period === "monthly" ? "text-foreground" : "text-muted-foreground")}>Monthly</span>
-        <button onClick={() => setPeriod(p => p === "monthly" ? "yearly" : "monthly")} role="switch" aria-checked={period === "yearly"} aria-label="Billing period"
+        <button role="switch" aria-checked={period === "yearly"} aria-label="Toggle yearly billing"
+          onClick={() => setPeriod(p => (p === "monthly" ? "yearly" : "monthly"))}
           className="relative h-[26px] w-[52px] rounded-full bg-muted border border-border transition-colors">
-          <span className={cn("absolute top-[3px] h-[18px] w-[18px] rounded-full bg-foreground transition-all duration-300", period === "yearly" ? "left-[29px]" : "left-[3px]")} />
+          <span className={cn("absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-foreground transition-all duration-300", period === "yearly" ? "left-[25px]" : "left-[3px]")} />
         </button>
-        <span className={cn("text-[13.5px] font-medium transition-colors flex items-center gap-1.5", period === "yearly" ? "text-foreground" : "text-muted-foreground")}>
-          Yearly <Badge tone="success">−20%</Badge>
+        <span className={cn("text-[13.5px] font-medium transition-colors inline-flex items-center gap-1.5", period === "yearly" ? "text-foreground" : "text-muted-foreground")}>
+          Yearly <Badge tone="success" className="font-mono text-[10px]">−20%</Badge>
         </span>
       </div>
-      <div className={cn("grid gap-5 md:grid-cols-3 lg:gap-6", compact ? "" : "items-stretch")}>
-        {plans.slice(0, compact ? 3 : 4).map((p, i) => {
-          const price = period === "monthly" ? p.monthly : Math.round(p.yearly / 12);
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
+        {plans.map(p => {
           const popular = p.isPopular;
+          const price = period === "monthly" ? p.monthly : p.yearly;
           return (
-            <Reveal key={p.id} delay={i * 80} className={cn(compact && i === 3 && "hidden lg:block")}>
-              <Card className={cn("relative h-full flex flex-col p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg", popular && "border-foreground shadow-md")}>
-                {popular && <span className="absolute -top-3 left-6"><Badge>Most popular</Badge></span>}
-                <h3 className="font-display font-bold text-lg tracking-tight">{p.name}</h3>
-                <p className="text-[13px] text-muted-foreground mt-1 leading-relaxed min-h-[38px]">{p.description}</p>
+            <Reveal key={p.id} delay={p.sort * 60} className="h-full">
+              <Card className={cn("relative h-full p-6 flex flex-col transition-all duration-300", popular ? "border-foreground shadow-lg" : "hover:border-foreground/30 hover:-translate-y-0.5")}>
+                {popular && <Badge className="absolute -top-2.5 left-5">Most popular</Badge>}
+                <h3 className="font-display font-bold text-[17px] tracking-tight">{p.name}</h3>
+                <p className="text-[12.5px] text-muted-foreground mt-1 leading-snug min-h-[34px]">{p.description}</p>
                 <div className="mt-4 flex items-baseline gap-1.5">
-                  <span className="font-display text-[38px] font-extrabold tracking-tight tabular leading-none">${price}</span>
-                  <span className="text-[13px] text-muted-foreground">/ month</span>
+                  <span className="font-display text-[32px] font-extrabold tracking-tight tabular">${price}</span>
+                  <span className="text-[12px] text-muted-foreground">/ {period === "monthly" ? "month" : "year"}</span>
                 </div>
-                <p className="text-[11.5px] text-muted-foreground mt-1 h-4 font-mono">{period === "yearly" ? `billed $${p.yearly}/yr` : p.slug === "enterprise" ? "or custom terms" : "billed monthly"}</p>
-                <ul className="mt-5 space-y-2.5 flex-1">
+                <ul className="mt-4 space-y-2 flex-1">
                   {p.features.map(f => (
-                    <li key={f} className="flex items-start gap-2.5 text-[13.5px]">
-                      <svg className="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5 6.5 11.5 12.5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      {f}
+                    <li key={f} className="flex items-start gap-2 text-[13px] text-muted-foreground leading-snug">
+                      <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-foreground" />{f}
                     </li>
                   ))}
                 </ul>
@@ -131,11 +131,46 @@ export function PricingSection({ compact = false }: { compact?: boolean }) {
           );
         })}
       </div>
-      {!compact && (
-        <div className="mt-8 text-center text-[13px] text-muted-foreground">
-          Every paid plan starts with a <Link to="/register" className="underline underline-offset-2 hover:text-foreground">free {getSettings().trial.days}-day trial</Link> — no card required. Prices configurable per plan.
-        </div>
-      )}
+      <p className="text-center text-[13px] text-muted-foreground mt-8">
+        Every paid plan starts with a free trial — <Link to="/register" className="font-medium text-foreground underline underline-offset-2 hover:opacity-80 transition-opacity">no card required</Link>.
+      </p>
+    </div>
+  );
+}
+
+/* ================= testimonials ================= */
+function TestimonialMarquee() {
+  const quotes = [
+    { q: "We replaced four separate subscriptions with ChatDeck. The usage meters alone are worth it — finance stopped emailing me.", n: "Priya Sharma", r: "Head of Content, Northwind" },
+    { q: "The SEO brief tool outputs exactly what our writers need. We went from 6 to 14 articles a month without hiring.", n: "Marcus Chen", r: "Founder, Driftline" },
+    { q: "Trial actually works like a trial. No card, no dark patterns, and upgrading took 40 seconds.", n: "Sophie Lindqvist", r: "Content Lead, Fjordlab" },
+    { q: "As an admin I love that I can tune plan limits and tool access without touching code.", n: "Amara Fields", r: "Operations, ChatDeck" },
+    { q: "The tone changer rescued a whole set of landing pages written by a very enthusiastic intern.", n: "Tom Okafor", r: "Studio Owner" },
+    { q: "Generation history is underrated — we reuse half our drafts as templates now.", n: "Elena Petrova", r: "CEO, Brightloop" },
+    { q: "Rate limits sound annoying until you realize they're why the tool is fast at 5pm on a Tuesday.", n: "Leo Martin", r: "Indie Hacker" },
+    { q: "Our non-profit got the trial extended in one support email. That's how you win people.", n: "Amina Keita", r: "Comms, Sahel Media" },
+  ];
+  const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const Row = ({ items, reverse }: { items: typeof quotes; reverse?: boolean }) => (
+    <div className="marquee-mask overflow-hidden" data-marquee>
+      <div className={cn("flex w-max marquee-track", !reduced && "animate-marquee")} style={{ gap: "1rem", ["--gap" as never]: "1rem", animationDirection: reverse ? "reverse" : undefined, ["--marquee-duration" as never]: "44s" }}>
+        {[...items, ...items].map((t, i) => (
+          <figure key={i} className="w-[320px] sm:w-[380px] shrink-0 rounded-xl border border-border bg-card p-5">
+            <div className="flex gap-0.5 mb-3">{[...Array(5)].map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />)}</div>
+            <blockquote className="text-[13.5px] leading-relaxed">“{t.q}”</blockquote>
+            <figcaption className="mt-4 flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center text-[11px] font-bold shrink-0">{t.n.split(" ").map(w => w[0]).join("")}</span>
+              <span className="min-w-0"><span className="block text-[12.5px] font-semibold leading-none truncate">{t.n}</span><span className="block text-[11.5px] text-muted-foreground mt-1 truncate">{t.r}</span></span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="space-y-4">
+      <Row items={quotes.slice(0, 4)} />
+      <Row items={quotes.slice(4)} reverse />
     </div>
   );
 }
@@ -175,9 +210,165 @@ export default function Landing() {
     { icon: <Users className="w-5 h-5" />, title: "Admin controls built in", body: "Manage users, plans, tools and trial rules from a full admin panel with an activity log." },
   ];
 
+  /* Homepage sections — order & visibility controlled in Admin → Settings → Homepage */
+  const sections: Record<string, React.ReactNode> = {
+    logos: (
+      <section key="logos" className="border-y border-border bg-card/40 py-6">
+        <p className="text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted-foreground mb-4">Teams writing with ChatDeck</p>
+        <LogoMarquee />
+      </section>
+    ),
+    tools: (
+      <section key="tools" id="tools" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 scroll-mt-20">
+        <SectionHead eyebrow="The deck" title={<>Every tool a content team reaches for, <em className="font-serif-accent italic font-normal">in one place</em></>} sub="Twenty-six specialized generators — each with inputs shaped for the job, not a generic prompt box." />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {tools.map((t, i) => (
+            <Reveal key={t.slug} delay={(i % 4) * 70}>
+              <button onClick={() => nav(user ? `/app/tools/${t.slug}` : "/register")}
+                className="group w-full text-left h-full rounded-xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-foreground/30">
+                <div className="flex items-start justify-between">
+                  <span className={cn("w-9 h-9 rounded-lg flex items-center justify-center", CATEGORY_META[t.category].chip)}><ToolIcon name={t.icon} className="w-4.5 h-4.5" /></span>
+                  <ArrowUpRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </div>
+                <h3 className="font-semibold text-[14.5px] mt-3.5 leading-snug">{t.name}</h3>
+                <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed">{t.tagline}</p>
+                <div className="flex items-center gap-2 mt-3.5 flex-wrap">
+                  <Badge tone="muted" className="font-mono text-[10px]">{CATEGORY_META[t.category].label}</Badge>
+                  {t.minTier !== "trial" && <Badge tone="outline" className="font-mono text-[10px] capitalize">{t.minTier}+</Badge>}
+                </div>
+              </button>
+            </Reveal>
+          ))}
+        </div>
+        <Reveal className="mt-9 text-center">
+          <Button variant="outline" onClick={() => nav(user ? "/app/tools" : "/register")}>
+            Explore all {db.tools.filter(t => t.active).length} tools <ArrowRight className="w-4 h-4" />
+          </Button>
+        </Reveal>
+      </section>
+    ),
+    features: (
+      <section key="features" id="features" className="border-y border-border bg-card/40 scroll-mt-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28">
+          <SectionHead eyebrow="Built like a product, not a wrapper" title={<>Serious SaaS plumbing under <em className="font-serif-accent italic font-normal">a calm interface</em></>} sub="Trials, plans, enforcement, billing and admin — the unglamorous parts, done properly." />
+          <div className="grid md:grid-cols-3 gap-4">
+            {features.map((f, i) => (
+              <Reveal key={f.title} delay={(i % 3) * 80} className={cn(f.big && "md:col-span-2")}>
+                <Card className={cn("h-full p-6 transition-all duration-300 hover:border-foreground/30 hover:-translate-y-0.5", f.big && "md:flex md:items-center md:gap-8")}>
+                  <div className={cn(f.big && "md:w-1/2")}>
+                    <span className="inline-flex w-10 h-10 rounded-lg bg-foreground text-background items-center justify-center">{f.icon}</span>
+                    <h3 className="font-display font-bold text-[16.5px] tracking-tight mt-4">{f.title}</h3>
+                  </div>
+                  <p className={cn("text-[13.5px] text-muted-foreground leading-relaxed mt-2.5", f.big && "md:w-1/2 md:mt-0")}>{f.body}</p>
+                </Card>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+    ),
+    stats: (
+      <section key="stats" className="max-w-6xl mx-auto px-4 sm:px-6 py-16 md:py-20">
+        <Reveal>
+          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border border border-border rounded-xl bg-card overflow-hidden">
+            {[
+              { n: db.tools.filter(t => t.active).length, s: "", l: "specialized AI tools" },
+              { n: 1200000, s: "+", l: "generations tracked" },
+              { n: 6, s: "", l: "languages supported" },
+              { n: 99, s: ".9%", l: "uptime last 90 days" },
+            ].map((x, i) => (
+              <div key={i} className="px-6 py-8 text-center">
+                <p className="font-display text-[30px] font-extrabold tracking-tight"><CountUp to={x.n} suffix={x.s} /></p>
+                <p className="text-[12.5px] text-muted-foreground mt-1">{x.l}</p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+      </section>
+    ),
+    how: (
+      <section key="how" id="how" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20 md:pb-28 scroll-mt-20">
+        <SectionHead eyebrow="How it works" title={<>From blank page to published in <em className="font-serif-accent italic font-normal">three moves</em></>} />
+        <div className="grid md:grid-cols-3 gap-4 relative">
+          <div className="hidden md:block absolute top-[38px] left-[18%] right-[18%] border-t border-dashed border-border" aria-hidden />
+          {[
+            { n: "01", t: "Pick a tool from the deck", b: "Each of the 26 tools has inputs designed for its job — topic, tone, audience, length — so you never fight a blank prompt." },
+            { n: "02", t: "Generate, refine, regenerate", b: "Output streams in as it's written. Copy it, tweak the inputs, regenerate with a new seed until it sounds like you." },
+            { n: "03", t: "Watch usage, not invoices", b: "Live meters show words and generations left on your plan. No surprise overages — limits are enforced, not estimated." },
+          ].map((s, i) => (
+            <Reveal key={s.n} delay={i * 110}>
+              <div className="relative rounded-xl border border-border bg-card p-6 h-full transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
+                <span className="relative z-10 inline-flex w-11 h-11 rounded-xl bg-foreground text-background font-mono text-[13px] font-semibold items-center justify-center">{s.n}</span>
+                <h3 className="font-display font-bold text-[16px] tracking-tight mt-4">{s.t}</h3>
+                <p className="text-[13.5px] text-muted-foreground leading-relaxed mt-2">{s.b}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+    ),
+    pricing: (
+      <section key="pricing" id="pricing" className="border-y border-border bg-card/40 scroll-mt-20">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28">
+          <SectionHead eyebrow="Pricing" title={<>Simple plans, <em className="font-serif-accent italic font-normal">honest limits</em></>} sub="Start free for 7 days. Upgrade when the meters tell you to — every plan is configurable down to the word." />
+          <PricingSection />
+        </div>
+      </section>
+    ),
+    testimonials: (
+      <section key="testimonials" id="testimonials" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 overflow-hidden scroll-mt-20">
+        <SectionHead eyebrow="Wall of love" title={<>Writers ship more, <em className="font-serif-accent italic font-normal">stress less</em></>} />
+        <TestimonialMarquee />
+      </section>
+    ),
+    faq: (
+      <section key="faq" id="faq" className="border-t border-border bg-card/40 scroll-mt-20">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20 md:py-28">
+          <SectionHead eyebrow="FAQ" title={<>Questions, <em className="font-serif-accent italic font-normal">answered</em></>} />
+          <div className="space-y-2.5">
+            {faqs.map(([q, a], i) => (
+              <Reveal key={q} delay={i * 40}>
+                <div className={cn("rounded-xl border bg-card transition-colors", openFaq === i ? "border-foreground/40" : "border-border")}>
+                  <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left" aria-expanded={openFaq === i}>
+                    <span className="font-semibold text-[14.5px]">{q}</span>
+                    <ChevronDown className={cn("w-4.5 h-4.5 shrink-0 transition-transform duration-300", openFaq === i && "rotate-180")} />
+                  </button>
+                  <div className={cn("grid transition-all duration-300 ease-out", openFaq === i ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
+                    <div className="overflow-hidden"><p className="px-5 pb-5 text-[13.5px] text-muted-foreground leading-relaxed">{a}</p></div>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+    ),
+    cta: (
+      <section key="cta" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-24">
+        <Reveal>
+          <div className="relative overflow-hidden rounded-xl bg-foreground text-background noise">
+            <div className="absolute inset-0 dot-grid opacity-[0.14]" aria-hidden />
+            <div className="relative px-6 py-14 sm:px-14 sm:py-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
+              <div>
+                <h2 className="font-display text-[28px] sm:text-[36px] font-extrabold tracking-tight leading-tight">Your first {settings.trial.words.toLocaleString()} words<br className="hidden sm:block" /> are on us.</h2>
+                <p className="text-[15px] opacity-70 mt-3 max-w-md">Free for {settings.trial.days} days. No credit card. Keep everything you create.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                <Button size="lg" variant="secondary" onClick={() => nav(user ? "/app" : "/register")}>Start free trial <ArrowRight className="w-4 h-4" /></Button>
+                <Button size="lg" variant="ghost" className="text-background border border-background/25 hover:bg-background/10 hover:text-background" onClick={() => nav("/pricing")}>Compare plans</Button>
+              </div>
+            </div>
+          </div>
+        </Reveal>
+      </section>
+    ),
+  };
+
+  const order = (settings.sections ?? []).filter(s => s.enabled).map(s => s.id);
+
   return (
     <PublicLayout>
-      {/* ============ hero ============ */}
+      {/* ============ hero (always first) ============ */}
       <section className="relative overflow-hidden noise">
         <div className="absolute inset-0 dot-grid [mask-image:radial-gradient(ellipse_75%_65%_at_50%_35%,black,transparent)]" aria-hidden />
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[720px] h-[420px] rounded-full bg-foreground/[0.05] blur-3xl" aria-hidden />
@@ -229,201 +420,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {renderSections()}
+      {order.map(id => sections[id] || null)}
     </PublicLayout>
-  );
-
-  function renderSections() {
-    const order = settings.sections.filter(s => s.enabled).map(s => s.id);
-    return order.map(id => SECTION_RENDER[id] || null);
-  }
-
-  const SECTION_RENDER: Record<string, React.ReactNode> = {
-  logos: (
-    <section key="logos" className="border-y border-border bg-card/40 py-6">
-      <p className="text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted-foreground mb-4">Teams writing with ChatDeck</p>
-      <LogoMarquee />
-    </section>
-  ),
-  tools: (
-    <section key="tools" id="tools" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 scroll-mt-20">
-        <SectionHead eyebrow="The deck" title={<>Every tool a content team reaches for, <em className="font-serif-accent italic font-normal">in one place</em></>} sub="Twenty-six specialized generators — each with inputs shaped for the job, not a generic prompt box." />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {tools.map((t, i) => (
-            <Reveal key={t.slug} delay={(i % 4) * 70}>
-              <button onClick={() => nav(user ? `/app/tools/${t.slug}` : "/register")}
-                className="group w-full text-left h-full rounded-xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-foreground/30">
-                <div className="flex items-start justify-between">
-                  <span className={cn("w-9 h-9 rounded-lg flex items-center justify-center", CATEGORY_META[t.category].chip)}><ToolIcon name={t.icon} className="w-4.5 h-4.5" /></span>
-                  <ArrowUpRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                </div>
-                <h3 className="font-semibold text-[14.5px] mt-3.5 leading-snug">{t.name}</h3>
-                <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed">{t.tagline}</p>
-                <div className="flex items-center gap-2 mt-3.5">
-                  <Badge tone="muted" className="font-mono text-[10px]">{CATEGORY_META[t.category].label}</Badge>
-                  {t.minTier !== "trial" && <Badge tone="outline" className="font-mono text-[10px] capitalize">{t.minTier}+</Badge>}
-                </div>
-              </button>
-            </Reveal>
-          ))}
-        </div>
-        <Reveal className="mt-9 text-center">
-          <Button variant="outline" onClick={() => nav(user ? "/app/tools" : "/register")}>
-            Explore all {db.tools.filter(t => t.active).length} tools <ArrowRight className="w-4 h-4" />
-          </Button>
-        </Reveal>
-      </section>
-
-      {/* ============ features ============ */}
-      <section id="features" className="border-y border-border bg-card/40 scroll-mt-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28">
-          <SectionHead eyebrow="Built like a product, not a wrapper" title={<>Serious SaaS plumbing under <em className="font-serif-accent italic font-normal">a calm interface</em></>} sub="Trials, plans, enforcement, billing and admin — the unglamorous parts, done properly." />
-          <div className="grid md:grid-cols-3 gap-4">
-            {features.map((f, i) => (
-              <Reveal key={f.title} delay={(i % 3) * 80} className={cn(f.big && "md:col-span-2")}>
-                <Card className={cn("h-full p-6 transition-all duration-300 hover:border-foreground/30 hover:-translate-y-0.5", f.big && "md:flex md:items-center md:gap-8")}>
-                  <div className={cn(f.big && "md:w-1/2")}>
-                    <span className="inline-flex w-10 h-10 rounded-lg bg-foreground text-background items-center justify-center">{f.icon}</span>
-                    <h3 className="font-display font-bold text-[16.5px] tracking-tight mt-4">{f.title}</h3>
-                  </div>
-                  <p className={cn("text-[13.5px] text-muted-foreground leading-relaxed mt-2.5", f.big && "md:w-1/2 md:mt-0")}>{f.body}</p>
-                </Card>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ stats band ============ */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 md:py-20">
-        <Reveal>
-          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border border border-border rounded-xl bg-card overflow-hidden">
-            {[
-              { n: db.tools.filter(t => t.active).length, s: "", l: "specialized AI tools" },
-              { n: 1200000, s: "+", l: "generations tracked" },
-              { n: 6, s: "", l: "languages supported" },
-              { n: 99, s: ".9%", l: "uptime last 90 days" },
-            ].map((x, i) => (
-              <div key={i} className="px-6 py-8 text-center">
-                <p className="font-display text-[30px] font-extrabold tracking-tight"><CountUp to={x.n} suffix={x.s} /></p>
-                <p className="text-[12.5px] text-muted-foreground mt-1">{x.l}</p>
-              </div>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
-      {/* ============ how ============ */}
-      <section id="how" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20 md:pb-28 scroll-mt-20">
-        <SectionHead eyebrow="How it works" title={<>From blank page to published in <em className="font-serif-accent italic font-normal">three moves</em></>} />
-        <div className="grid md:grid-cols-3 gap-4 relative">
-          <div className="hidden md:block absolute top-[38px] left-[18%] right-[18%] border-t border-dashed border-border" aria-hidden />
-          {[
-            { n: "01", t: "Pick a tool from the deck", b: "Each of the 26 tools has inputs designed for its job — topic, tone, audience, length — so you never fight a blank prompt." },
-            { n: "02", t: "Generate, refine, regenerate", b: "Output streams in as it's written. Copy it, tweak the inputs, regenerate with a new seed until it sounds like you." },
-            { n: "03", t: "Watch usage, not invoices", b: "Live meters show words and generations left on your plan. No surprise overages — limits are enforced, not estimated." },
-          ].map((s, i) => (
-            <Reveal key={s.n} delay={i * 110}>
-              <div className="relative rounded-xl border border-border bg-card p-6 h-full transition-all duration-300 hover:-translate-y-1 hover:shadow-md">
-                <span className="relative z-10 inline-flex w-11 h-11 rounded-xl bg-foreground text-background font-mono text-[13px] font-semibold items-center justify-center">{s.n}</span>
-                <h3 className="font-display font-bold text-[16px] tracking-tight mt-4">{s.t}</h3>
-                <p className="text-[13.5px] text-muted-foreground leading-relaxed mt-2">{s.b}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* ============ pricing ============ */}
-      <section id="pricing" className="border-y border-border bg-card/40 scroll-mt-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28">
-          <SectionHead eyebrow="Pricing" title={<>Simple plans, <em className="font-serif-accent italic font-normal">honest limits</em></>} sub="Start free for 7 days. Upgrade when the meters tell you to — every plan is configurable down to the word." />
-          <PricingSection />
-        </div>
-      </section>
-
-      {/* ============ testimonials ============ */}
-      <section id="testimonials" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 overflow-hidden scroll-mt-20">
-        <SectionHead eyebrow="Wall of love" title={<>Writers ship more, <em className="font-serif-accent italic font-normal">stress less</em></>} />
-        <TestimonialMarquee />
-      </section>
-
-      {/* ============ faq ============ */}
-      <section id="faq" className="border-t border-border bg-card/40 scroll-mt-20">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-20 md:py-28">
-          <SectionHead eyebrow="FAQ" title={<>Questions, <em className="font-serif-accent italic font-normal">answered</em></>} />
-          <div className="space-y-2.5">
-            {faqs.map(([q, a], i) => (
-              <Reveal key={q} delay={i * 40}>
-                <div className={cn("rounded-xl border bg-card transition-colors", openFaq === i ? "border-foreground/40" : "border-border")}>
-                  <button onClick={() => setOpenFaq(openFaq === i ? null : i)} className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left" aria-expanded={openFaq === i}>
-                    <span className="font-semibold text-[14.5px]">{q}</span>
-                    <ChevronDown className={cn("w-4.5 h-4.5 shrink-0 transition-transform duration-300", openFaq === i && "rotate-180")} />
-                  </button>
-                  <div className={cn("grid transition-all duration-300 ease-out", openFaq === i ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
-                    <div className="overflow-hidden"><p className="px-5 pb-5 text-[13.5px] text-muted-foreground leading-relaxed">{a}</p></div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============ cta ============ */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-24">
-        <Reveal>
-          <div className="relative overflow-hidden rounded-xl bg-foreground text-background noise">
-            <div className="absolute inset-0 dot-grid opacity-[0.14]" aria-hidden />
-            <div className="relative px-6 py-14 sm:px-14 sm:py-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-              <div>
-                <h2 className="font-display text-[28px] sm:text-[36px] font-extrabold tracking-tight leading-tight">Your first {settings.trial.words.toLocaleString()} words<br className="hidden sm:block" /> are on us.</h2>
-                <p className="text-[15px] opacity-70 mt-3 max-w-md">Free for {settings.trial.days} days. No credit card. Keep everything you create.</p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-                <Button size="lg" variant="secondary" onClick={() => nav(user ? "/app" : "/register")}>Start free trial <ArrowRight className="w-4 h-4" /></Button>
-                <Button size="lg" variant="ghost" className="text-background border border-background/25 hover:bg-background/10 hover:text-background" onClick={() => nav("/pricing")}>Compare plans</Button>
-              </div>
-            </div>
-          </div>
-        </Reveal>
-      </section>
-    </PublicLayout>
-  );
-}
-
-function TestimonialMarquee() {
-  const quotes = [
-    { q: "We replaced four separate subscriptions with ChatDeck. The usage meters alone are worth it — finance stopped emailing me.", n: "Priya Sharma", r: "Head of Content, Northwind" },
-    { q: "The SEO brief tool outputs exactly what our writers need. We went from 6 to 14 articles a month without hiring.", n: "Marcus Chen", r: "Founder, Driftline" },
-    { q: "Trial actually works like a trial. No card, no dark patterns, and upgrading took 40 seconds.", n: "Sophie Lindqvist", r: "Content Lead, Fjordlab" },
-    { q: "As an admin I love that I can tune plan limits and tool access without touching code.", n: "Amara Fields", r: "Operations, ChatDeck" },
-    { q: "The tone changer rescued a whole set of landing pages written by a very enthusiastic intern.", n: "Tom Okafor", r: "Studio Owner" },
-    { q: "Generation history is underrated — we reuse half our drafts as templates now.", n: "Elena Petrova", r: "CEO, Brightloop" },
-    { q: "Rate limits sound annoying until you realize they're why the tool is fast at 5pm on a Tuesday.", n: "Leo Martin", r: "Indie Hacker" },
-    { q: "Our non-profit got the trial extended in one support email. That's how you win people.", n: "Amina Keita", r: "Comms, Sahel Media" },
-  ];
-  const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const Row = ({ items, reverse }: { items: typeof quotes; reverse?: boolean }) => (
-    <div className="marquee-mask overflow-hidden" data-marquee>
-      <div className={cn("flex w-max marquee-track", !reduced && "animate-marquee")} style={{ gap: "1rem", ["--gap" as never]: "1rem", animationDirection: reverse ? "reverse" : undefined, ["--marquee-duration" as never]: "44s" }}>
-        {[...items, ...items].map((t, i) => (
-          <figure key={i} className="w-[320px] sm:w-[380px] shrink-0 rounded-xl border border-border bg-card p-5">
-            <div className="flex gap-0.5 mb-3">{[...Array(5)].map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />)}</div>
-            <blockquote className="text-[13.5px] leading-relaxed">“{t.q}”</blockquote>
-            <figcaption className="mt-4 flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-full bg-foreground text-background flex items-center justify-center text-[11px] font-bold">{t.n.split(" ").map(w => w[0]).join("")}</span>
-              <span><span className="block text-[12.5px] font-semibold leading-none">{t.n}</span><span className="block text-[11.5px] text-muted-foreground mt-1">{t.r}</span></span>
-            </figcaption>
-          </figure>
-        ))}
-      </div>
-    </div>
-  );
-  return (
-    <div className="space-y-4">
-      <Row items={quotes.slice(0, 4)} />
-      <Row items={quotes.slice(4)} reverse />
-    </div>
   );
 }
