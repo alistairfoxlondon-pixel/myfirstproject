@@ -2,7 +2,8 @@ import React, { useMemo, useState } from "react";
 import { Navigate, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, CreditCard, Blocks, Settings as SettingsIcon, LogOut, ArrowLeft,
-  Search, Pencil, Trash2, RotateCcw, Plus, Eye, EyeOff, AlertTriangle, Check, X, Activity,
+  Search, Pencil, Trash2, RotateCcw, Plus, Eye, EyeOff, AlertTriangle, Check, X, Activity, Newspaper,
+  ChevronUp, ChevronDown, Download, Globe2,
 } from "lucide-react";
 import { Logo, ToolIcon, CATEGORY_META } from "../components/icons";
 import { AreaChart, Badge, BarChart, Button, Card, Field, Input, Modal, Select, Switch, Tabs, Textarea, cn } from "../components/ui";
@@ -11,18 +12,20 @@ import { Plan, Settings as SettingsT, Tool, User, getDb } from "../lib/db";
 import {
   adminDeletePlan, adminDeleteTool, adminDeleteUser, adminListUsers, adminResetUsage, adminSavePlan,
   adminSaveSettings, adminSaveTool, adminStats, adminUpdateUser, fmtDate, fmtDateTime, fmtMoney, fmtNum,
-  getSettings, resetDemoData,
+  getSettings, resetDemoData, buildSitemap,
 } from "../lib/services";
+import { adminAddRedirect, adminDeleteRedirect, adminListRedirects } from "../lib/content";
 
 const NAV = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/plans", label: "Plans", icon: CreditCard },
   { to: "/admin/tools", label: "AI Tools", icon: Blocks },
+  { to: "/admin/blog", label: "Blog", icon: Newspaper },
   { to: "/admin/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-function AdminShell({ title, sub, children, actions }: { title: string; sub?: string; children: React.ReactNode; actions?: React.ReactNode }) {
+export function AdminShell({ title, sub, children, actions }: { title: string; sub?: string; children: React.ReactNode; actions?: React.ReactNode }) {
   const { user, signOut } = useApp();
   const nav = useNavigate();
   if (!user) return <Navigate to="/login" replace />;
@@ -484,12 +487,20 @@ export function AdminSettings() {
     refresh();
   };
   const set = <K extends keyof SettingsT>(k: K, patch: Partial<SettingsT[K]>) => setS(prev => ({ ...prev, [k]: { ...prev[k], ...patch } }));
+  const moveSection = (i: number, dir: -1 | 1) => setS(prev => {
+    const arr = [...prev.sections];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return prev;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return { ...prev, sections: arr };
+  });
 
   return (
     <AdminShell title="System settings" sub="Site, registration, trial, AI provider and usage policy"
       actions={<Button size="sm" onClick={save}><Check className="w-3.5 h-3.5" /> Save all</Button>}>
       <Tabs className="mb-6" value={tab} onChange={setTab} items={[
-        { key: "site", label: "Site" }, { key: "registration", label: "Registration" },
+        { key: "site", label: "Site" }, { key: "seo", label: "SEO" }, { key: "homepage", label: "Homepage" },
+        { key: "registration", label: "Registration" },
         { key: "trial", label: "Free trial" }, { key: "ai", label: "AI provider" }, { key: "usage", label: "Usage & billing" },
       ]} />
 
@@ -503,6 +514,29 @@ export function AdminSettings() {
             <Field label="Twitter / X URL"><Input value={s.site.twitter} onChange={e => set("site", { twitter: e.target.value })} /></Field>
             <Field label="GitHub URL"><Input value={s.site.github} onChange={e => set("site", { github: e.target.value })} /></Field>
           </div>
+        </Card>
+      )}
+
+      {tab === "seo" && <SeoTab s={s} set={set} />}
+      {tab === "homepage" && (
+        <Card className="p-5 sm:p-6 max-w-2xl">
+          <p className="text-[13.5px] font-semibold">Landing page sections</p>
+          <p className="text-[12.5px] text-muted-foreground mt-1 mb-4">Enable, disable and reorder the public homepage. Hero stays first; changes go live on save.</p>
+          <ul className="space-y-2">
+            {s.sections.map((sec, i) => (
+              <li key={sec.id} className="flex items-center gap-3 rounded-lg border border-border bg-background px-3.5 py-2.5">
+                <span className="font-mono text-[11px] text-muted-foreground w-5 text-center">{i + 1}</span>
+                <span className="text-[13.5px] font-medium flex-1">{sec.label}</span>
+                <div className="flex items-center gap-1">
+                  <button disabled={i === 0} onClick={() => moveSection(i, -1)} aria-label={`Move ${sec.label} up`}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 transition-colors"><ChevronUp className="w-4 h-4" /></button>
+                  <button disabled={i === s.sections.length - 1} onClick={() => moveSection(i, 1)} aria-label={`Move ${sec.label} down`}
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 transition-colors"><ChevronDown className="w-4 h-4" /></button>
+                  <Switch checked={sec.enabled} onChange={v => setS(prev => ({ ...prev, sections: prev.sections.map(x => x.id === sec.id ? { ...x, enabled: v } : x) }))} />
+                </div>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 
@@ -581,5 +615,107 @@ export function AdminSettings() {
         <p className="text-[13.5px] text-muted-foreground leading-relaxed">Every account (including yours), subscription, generation and setting returns to the seeded state. The page will reload.</p>
       </Modal>
     </AdminShell>
+  );
+}
+
+/* ================= SEO tab ================= */
+function SeoTab({ s, set }: { s: SettingsT; set: <K extends keyof SettingsT>(k: K, patch: Partial<SettingsT[K]>) => void }) {
+  const { user: admin, toast, refresh } = useApp();
+  const [redirects, setRedirects] = useState(() => (admin ? adminListRedirects(admin) : []));
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [redErr, setRedErr] = useState("");
+  const [sitemapOpen, setSitemapOpen] = useState(false);
+  const sitemap = useMemo(() => (sitemapOpen ? buildSitemap() : ""), [sitemapOpen, redirects]);
+
+  const addRedirect = () => {
+    if (!admin) return;
+    try {
+      adminAddRedirect(admin, from, to);
+      setRedirects(adminListRedirects(admin));
+      setFrom(""); setTo(""); setRedErr("");
+      toast("success", "Redirect added", `${from} → ${to}`);
+      refresh();
+    } catch (ex: unknown) { setRedErr((ex as Error).message); }
+  };
+  const downloadFile = (name: string, content: string, type: string) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([content], { type }));
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-4 items-start">
+      <Card className="p-5 sm:p-6">
+        <p className="text-[13.5px] font-semibold">Global search metadata</p>
+        <p className="text-[12.5px] text-muted-foreground mt-1 mb-4">Defaults applied to every public page unless a post or page overrides them.</p>
+        <div className="space-y-4">
+          <Field label="Default title" help={`${s.seo.defaultTitle.length}/60 characters`}>
+            <Input value={s.seo.defaultTitle} onChange={e => set("seo", { defaultTitle: e.target.value })} maxLength={70} />
+          </Field>
+          <Field label="Default meta description" help={`${s.seo.defaultDescription.length}/160 characters`}>
+            <Textarea rows={2} value={s.seo.defaultDescription} onChange={e => set("seo", { defaultDescription: e.target.value })} maxLength={170} />
+          </Field>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Canonical base URL" help="Used to build canonical and sitemap URLs.">
+              <Input value={s.seo.canonicalBase} onChange={e => set("seo", { canonicalBase: e.target.value })} className="font-mono" placeholder="https://chatdeck.app" />
+            </Field>
+            <Field label="Open Graph site name">
+              <Input value={s.seo.ogSiteName} onChange={e => set("seo", { ogSiteName: e.target.value })} />
+            </Field>
+          </div>
+          <div className="flex items-center justify-between gap-4 pt-1">
+            <div><p className="text-[13.5px] font-medium">Index public pages</p><p className="text-[12px] text-muted-foreground mt-0.5">When off, a noindex tag is added site-wide. /app and /admin are never indexed.</p></div>
+            <Switch checked={s.seo.indexPublic} onChange={v => set("seo", { indexPublic: v })} />
+          </div>
+        </div>
+      </Card>
+
+      <div className="space-y-4">
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <p className="text-[13.5px] font-semibold">Redirects</p>
+              <p className="text-[12.5px] text-muted-foreground mt-1">Exact-path 301-style redirects applied inside the router.</p>
+            </div>
+            <Badge tone="muted" className="font-mono shrink-0">{redirects.length}</Badge>
+          </div>
+          <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2">
+            <Input value={from} onChange={e => setFrom(e.target.value)} placeholder="/old-page" className="font-mono" aria-label="Redirect source" />
+            <Input value={to} onChange={e => setTo(e.target.value)} placeholder="/new-page or https://…" className="font-mono" aria-label="Redirect target" />
+            <Button variant="outline" onClick={addRedirect}><Plus className="w-4 h-4" /> Add</Button>
+          </div>
+          {redErr && <p className="text-[12px] text-destructive mt-2">{redErr}</p>}
+          <ul className="mt-3.5 space-y-1.5">
+            {redirects.map(r => (
+              <li key={r.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-2 text-[12.5px]">
+                <span className="font-mono truncate">{r.from}</span>
+                <span className="text-muted-foreground shrink-0">→</span>
+                <span className="font-mono truncate flex-1">{r.to}</span>
+                <button onClick={() => { if (!admin) return; adminDeleteRedirect(admin, r.id); setRedirects(adminListRedirects(admin)); toast("info", "Redirect removed", r.from); }}
+                  aria-label={`Delete redirect ${r.from}`} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+              </li>
+            ))}
+            {redirects.length === 0 && <li className="text-[12.5px] text-muted-foreground px-1">No redirects configured.</li>}
+          </ul>
+        </Card>
+
+        <Card className="p-5 sm:p-6">
+          <p className="text-[13.5px] font-semibold">robots.txt & sitemap</p>
+          <p className="text-[12.5px] text-muted-foreground mt-1 mb-4">Served at the domain root. The sitemap is generated from published content only.</p>
+          <Field label="robots.txt">
+            <Textarea rows={6} className="font-mono text-[12px]" value={s.seo.robots} onChange={e => set("seo", { robots: e.target.value })} />
+          </Field>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <Button variant="outline" size="sm" onClick={() => downloadFile("robots.txt", s.seo.robots, "text/plain")}><Download className="w-3.5 h-3.5" /> Download robots.txt</Button>
+            <Button variant="outline" size="sm" onClick={() => setSitemapOpen(v => !v)}><Globe2 className="w-3.5 h-3.5" /> {sitemapOpen ? "Hide sitemap" : "Preview sitemap.xml"}</Button>
+            {sitemapOpen && <Button variant="outline" size="sm" onClick={() => downloadFile("sitemap.xml", sitemap, "application/xml")}><Download className="w-3.5 h-3.5" /> Download sitemap</Button>}
+          </div>
+          {sitemapOpen && <pre className="mt-3 text-[11px] font-mono bg-muted rounded-lg p-3.5 overflow-x-auto max-h-56 scroll-slim whitespace-pre">{sitemap}</pre>}
+        </Card>
+      </div>
+    </div>
   );
 }

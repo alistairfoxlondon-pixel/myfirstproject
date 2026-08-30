@@ -11,6 +11,8 @@ export interface EditorHandle {
   getHtml(): string;
   focus(): void;
   hasSelection(): boolean;
+  getSelectionText(): string;
+  replaceSelectionHtml(html: string, after?: boolean): void;
 }
 
 interface EditorProps {
@@ -19,6 +21,7 @@ interface EditorProps {
   onStats(stats: { words: number; chars: number; readMin: number }): void;
   placeholder?: string;
   renderLinkPopover?: (setUrl: (url: string) => void) => React.ReactNode; // suggestion content inside the link popover
+  onSelect?: (text: string, rect: DOMRect | null) => void; // selection changed (for the AI selection toolbar)
 }
 
 const TBtn = ({ on, title, onClick, children }: { on?: boolean; title: string; onClick: () => void; children: React.ReactNode }) => (
@@ -32,7 +35,7 @@ const TBtn = ({ on, title, onClick, children }: { on?: boolean; title: string; o
 );
 const Sep = () => <span className="w-px h-5 bg-border mx-1 shrink-0" aria-hidden />;
 
-export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEditor({ initialHtml, onChange, onStats, placeholder, renderLinkPopover }, ref) {
+export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEditor({ initialHtml, onChange, onStats, placeholder, renderLinkPopover, onSelect }, ref) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const savedRange = useRef<Range | null>(null);
   const [source, setSource] = useState(false);
@@ -92,10 +95,35 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
     sel?.addRange(savedRange.current);
   };
 
+  const emitSelection = () => {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0 || !bodyRef.current?.contains(sel.anchorNode)) return;
+    const text = sel.toString().trim();
+    if (text.length < 3) { onSelect?.("", null); return; }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    savedRange.current = range.cloneRange();
+    onSelect?.(text, rect.width > 0 ? rect : null);
+  };
+
   useImperativeHandle(ref, () => ({
     getHtml: () => bodyRef.current?.innerHTML || "",
     focus: () => bodyRef.current?.focus(),
     hasSelection: () => !!savedRange.current && !savedRange.current.collapsed,
+    getSelectionText: () => savedRange.current?.toString().trim() || "",
+    replaceSelectionHtml(html: string, after = false) {
+      bodyRef.current?.focus();
+      if (savedRange.current) {
+        const sel = document.getSelection();
+        sel?.removeAllRanges();
+        const r = savedRange.current.cloneRange();
+        if (after) r.collapse(false); // insert after the selection instead of replacing it
+        sel?.addRange(r);
+      }
+      document.execCommand("insertHTML", false, sanitizeHtml(html));
+      savedRange.current = null;
+      emit();
+    },
     insertHtml(html, mode) {
       const el = bodyRef.current;
       if (!el) return;
@@ -212,8 +240,8 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
           data-placeholder={placeholder || "Start writing, or generate a draft with the assistant…"}
           className="prose-doc min-h-[420px] max-h-[62vh] overflow-y-auto studio-scroll px-5 sm:px-8 py-6 focus:outline-none"
           onInput={emit}
-          onKeyUp={detectBlock}
-          onMouseUp={() => { detectBlock(); saveSelection(); }}
+          onKeyUp={e => { detectBlock(); if (e.key.startsWith("Arrow") || e.key === "Shift") emitSelection(); }}
+          onMouseUp={() => { detectBlock(); saveSelection(); emitSelection(); }}
           onKeyDown={e => { onKeyDown(e); }}
           onPaste={e => {
             e.preventDefault();

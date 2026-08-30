@@ -50,6 +50,14 @@ export interface Invoice {
   amount: number; status: "paid" | "open" | "void"; createdAt: string; last4: string;
 }
 export interface Activity { id: string; actor: string; role: string; action: string; detail: string; createdAt: string; }
+export interface Post {
+  id: string; slug: string; title: string; excerpt: string; body: string;
+  category: string; tags: string[]; author: string;
+  status: "draft" | "published" | "scheduled"; publishAt: string;
+  cover: { prompt: string; seed: number; style: string; alt: string } | null;
+  seo: { title: string; description: string; canonical: string };
+  createdAt: string; updatedAt: string;
+}
 export interface Settings {
   site: { name: string; tagline: string; description: string; supportEmail: string; twitter: string; github: string; linkedin: string };
   registration: { enabled: boolean; requireVerification: boolean };
@@ -57,12 +65,14 @@ export interface Settings {
   ai: { provider: "openai" | "anthropic" | "gemini" | "mock"; model: string; apiKey: string; temperature: number; maxTokens: number };
   usage: { ratePerMinute: number; maxOutputWords: number };
   billing: { currency: string; taxRate: number };
+  seo: { defaultTitle: string; defaultDescription: string; canonicalBase: string; ogSiteName: string; indexPublic: boolean; robots: string };
+  sections: { id: string; label: string; enabled: boolean }[];
 }
 export interface DB {
   version: number;
   users: User[]; plans: Plan[]; tools: Tool[]; subscriptions: Subscription[];
   generations: Generation[]; usage: Usage[]; invoices: Invoice[]; activity: Activity[];
-  settings: Settings; seq: number;
+  posts: Post[]; settings: Settings; seq: number;
 }
 
 /* ================= helpers ================= */
@@ -91,7 +101,7 @@ const SAMPLE_TEXT = [
 ];
 
 /* ================= seed ================= */
-const SEED_VERSION = 7;
+const SEED_VERSION = 8;
 
 function seedTools(): Tool[] {
   const tone = { key: "tone", label: "Tone of voice", type: "select" as const, options: TONES, default: "professional" };
@@ -382,6 +392,51 @@ function seedActivity(): Activity[] {
   ];
 }
 
+function seedPosts(): Post[] {
+  const p = (slug: string, title: string, category: string, tags: string[], status: Post["status"], ago: number, style: string, excerpt: string, body: string): Post => ({
+    id: "post_" + slug, slug, title, excerpt, body, category, tags, author: "Amara Fields",
+    status, publishAt: daysAgoISO(ago),
+    cover: { prompt: title, seed: hashStr(slug) % 99999, style, alt: `Abstract cover illustration for ${title.toLowerCase()}` },
+    seo: { title: title.slice(0, 58), description: excerpt.slice(0, 152), canonical: "" },
+    createdAt: daysAgoISO(ago + 2), updatedAt: daysAgoISO(ago),
+  });
+  return [
+    p("usage-limits-are-a-feature", "Usage limits are a feature, not a friction", "Product", ["saas", "pricing", "trust"], "published", 6, "band",
+      "Why honest word and generation meters build more trust than “unlimited” plans that quietly throttle you.",
+      `Every SaaS buyer has been burned by "unlimited". Unlimited pages that load for four seconds. Unlimited seats that cost extra per seat. Unlimited generations that stop being unlimited the moment you scale.\n\n## The problem with fake unlimited\n\nUnlimited pricing is a promise the product can't keep. Compute costs money, so someone has to ration it — and when the rationing is invisible, it feels like betrayal. Visible limits feel like honesty.\n\n## What honest meters do\n\n- **They set expectations before the invoice arrives.** Nobody is surprised by a bill they could see counting up.\n- **They make upgrades feel earned.** When the meter tells you it's time, the upgrade decision is yours — not a sales rep's.\n- **They protect quality at peak hours.** Rate limits are why the tool still feels fast at 5pm on a Tuesday.\n\n## Designing limits people accept\n\nShow the meter in the sidebar, not buried in a billing page. Warn at 80%, not 100%. And when a user hits the ceiling, offer three honest doors: upgrade, wait for the reset, or export what they've made.\n\nLimits, displayed well, are one of the cheapest trust-building exercises a product team has. Use them.`),
+    p("seo-brief-workflow", "The 20-minute SEO brief that beats a 4-hour article", "SEO", ["workflow", "keywords", "briefs"], "published", 13, "editorial",
+      "A tight brief — intent, outline, entities, SERP notes — outperforms long-form guesswork almost every time.",
+      `Most content teams write the article first and "optimize" it afterwards. That's backwards. The brief is where ranking decisions get made.\n\n## What goes in a 20-minute brief\n\n1. **Search intent, in one sentence.** "The reader wants to compare options before buying" beats "informational".\n2. **A skeleton of H2s.** Three to six, each answering a question the SERP proves people ask.\n3. **Entities, not keywords.** The nouns and products the topic must mention to be considered complete.\n4. **SERP notes.** What the top five results all cover — and what they all miss.\n\n## The compound effect\n\nA brief takes twenty minutes and saves the writer from the expensive mistake: a 1,500-word answer to a question nobody ranks for. Writers draft faster, editors review faster, and refresh cycles get shorter because the structure was right from day one.\n\nBrief first. Write second. Rank occasionally, and learn every time.`),
+    p("rewriting-without-losing-voice", "Rewriting with AI without losing your voice", "Content strategy", ["editing", "voice", "ai"], "published", 21, "arc",
+      "Tone controls and rewrite strength are levers — but the voice has to come from your corpus, not the model's defaults.",
+      `The fastest way to make AI content feel generic is to accept the first rewrite. Models default to a pleasant, corporate mean — competent and forgettable.\n\n## Keep the voice, change the register\n\nThink of tone as a dial with three honest positions: *light* cleans grammar and rhythm, *moderate* restructures sentences, *heavy* rewrites for a different audience. Most documents want light. Heavy is for repurposing, not polishing.\n\n## A review pass that takes four minutes\n\n- Read it aloud once. Anything you stumble over, the reader skips.\n- Delete every sentence that could open any other article on the topic.\n- Put one specific number, name, or date back in. Specificity is the fingerprint.\n\nThe tool's job is velocity. Your job is the fingerprint. Teams that keep that division of labor ship more *and* sound like themselves.`),
+    p("publishing-pipeline-checklist", "A publishing pipeline checklist for small teams", "Content strategy", ["checklist", "cms", "process"], "published", 30, "grid",
+      "From draft to published in one repeatable loop: write, brief-check, SEO pass, schedule, distribute.",
+      `Small teams don't fail at writing — they fail at the last mile. The draft sits in a doc for three weeks because nobody owns the steps between "done" and "live".\n\n## The five-step loop\n\n1. **Write** against a brief, not a blank page.\n2. **Brief-check**: does every H2 answer its question? Cut what doesn't.\n3. **SEO pass**: title under 60 characters, description under 155, keyword in the first paragraph and one heading.\n4. **Schedule** at the hour your audience actually reads — for B2B, that's usually Tuesday or Wednesday morning.\n5. **Distribute** the same day: newsletter paragraph, one social post, one internal link from an older article.\n\n## Make the loop boring\n\nThe checklist works because it's the same every time. After ten cycles your team runs it in under an hour, and "publishing" stops being an event and becomes a Tuesday.`),
+    p("trial-design-principles", "Seven trial-design principles we stole from the best onboarding teams", "Product", ["trial", "onboarding", "activation"], "published", 41, "editorial",
+      "No card up front, limits shown not hidden, and an upgrade path that feels like a door — not a wall.",
+      `A free trial is a promise: "this is what owning the product feels like." Most trials break that promise in the first hour — card forms, vague limits, or a feature set so stripped the product feels like a demo.\n\n## Principles that survive contact with real users\n\n- **No card before value.** Ask for payment after the first result, not before it.\n- **Show the meter.** Users who can see their allowance spend it deliberately — and upgrade deliberately.\n- **Time-box honestly.** Seven days is a deadline people respect; "14-day trial, then we'll see" is not.\n- **Let them keep the work.** Export everything, always. Locking creations hostage poisons the upgrade.\n\n## The exit should be graceful\n\nWhen the trial ends, the product should say one clear sentence: what you used, what it cost, what happens next. No dark patterns, no guilt screens. Users who leave gracefully come back; users who feel tricked don't.`),
+    p("schema-markup-primer", "Schema markup: the 30-minute primer that actually sticks", "SEO", ["schema", "technical-seo", "faq"], "scheduled", -4, "band",
+      "Article, FAQ and Breadcrumb schema — what they do, what they don't, and the only three worth adding this week.",
+      `Structured data doesn't move rankings. It moves *presentation* — and presentation moves clicks. That distinction is why most schema advice online is either oversold or dismissed.\n\n## The three worth adding first\n\n1. **Article schema** on blog posts: headline, author, dates. It keeps your byline intact as content gets reshared.\n2. **FAQ schema** on pages with real questions — not keyword-stuffed ones. Rich results here are earned by usefulness.\n3. **Breadcrumb schema** so search results show the path, not a raw URL.\n\n## Validate, then forget\n\nPaste your URL into any structured-data tester, fix the warnings, and move on. Schema is a set-and-forget layer: add it once, keep it honest, and spend your energy on the content it describes.`),
+    p("draft-content-calendar-system", "Draft: a content calendar that runs itself", "Content strategy", ["calendar", "systems"], "draft", -9, "arc",
+      "Working notes on recurring formats, theme months, and the 3-1-1 cadence.",
+      `Working draft — not for publication yet.\n\n## Ideas to develop\n\n- The 3-1-1 cadence: three short posts, one deep dive, one experiment per month.\n- Theme months vs evergreen rotation.\n- How to let the calendar own distribution so writing stays focused.`),
+  ];
+}
+
+const DEFAULT_SECTIONS = [
+  { id: "logos", label: "Customer logos", enabled: true },
+  { id: "tools", label: "Tool showcase", enabled: true },
+  { id: "features", label: "Feature grid", enabled: true },
+  { id: "stats", label: "Stats band", enabled: true },
+  { id: "how", label: "How it works", enabled: true },
+  { id: "pricing", label: "Pricing preview", enabled: true },
+  { id: "testimonials", label: "Testimonials", enabled: true },
+  { id: "faq", label: "FAQ", enabled: true },
+  { id: "cta", label: "Closing CTA", enabled: true },
+];
+
 export function freshDb(): DB {
   const tools = seedTools();
   const plans = seedPlans();
@@ -395,6 +450,7 @@ export function freshDb(): DB {
     usage: seedUsage(users, generations),
     invoices: seedInvoices(users),
     activity: seedActivity(),
+    posts: seedPosts(),
     settings: {
       site: { name: "ChatDeck", tagline: "The AI writing studio for teams that ship.", description: "25+ AI writing, SEO and marketing tools with flexible plans and a dashboard built for speed.", supportEmail: "support@chatdeck.ai", twitter: "https://twitter.com/chatdeck", github: "https://github.com/chatdeck", linkedin: "https://linkedin.com/company/chatdeck" },
       registration: { enabled: true, requireVerification: false },
@@ -402,6 +458,13 @@ export function freshDb(): DB {
       ai: { provider: "openai", model: "gpt-4.1-mini", apiKey: "sk-demo-••••••••••••••••3f2a", temperature: 0.7, maxTokens: 2048 },
       usage: { ratePerMinute: 6, maxOutputWords: 1500 },
       billing: { currency: "USD", taxRate: 0 },
+      seo: {
+        defaultTitle: "ChatDeck — The AI writing studio for teams that ship",
+        defaultDescription: "25+ AI writing, SEO, and marketing tools with flexible plans, a free trial, and a dashboard built for speed.",
+        canonicalBase: "https://chatdeck.app", ogSiteName: "ChatDeck", indexPublic: true,
+        robots: "User-agent: *\nAllow: /\n\n# Authenticated areas are never indexed\nDisallow: /#/app\nDisallow: /#/admin\n\nSitemap: https://chatdeck.app/sitemap.xml",
+      },
+      sections: JSON.parse(JSON.stringify(DEFAULT_SECTIONS)),
     },
     seq: 1041,
   };

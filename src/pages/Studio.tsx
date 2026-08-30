@@ -3,13 +3,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, FileText, Plus, Search, Trash2, Copy as CopyIcon, Star, Sparkles, Wand2, ListTree,
   Image as ImageIcon, Send, Download, CheckCircle2, XCircle, Globe, Ghost, PenLine, LayoutGrid,
-  RefreshCw, Save, ExternalLink, Link2, Clock3, Loader2 as LoaderCircle,
+  RefreshCw, Save, ExternalLink, Link2, Clock3, Loader2 as LoaderCircle, X as XIcon,
 } from "lucide-react";
 import AppShell from "./AppShell";
 import { RichEditor, EditorHandle } from "../components/editor";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Textarea, cn } from "../components/ui";
 import { useApp } from "../lib/app";
-import { generate, fmtDateTime } from "../lib/services";
+import { generate, fmtDateTime, runStudioAssist } from "../lib/services";
+import type { AssistAction } from "../lib/ai";
 import {
   Doc, listDocs, getDoc, createDoc, saveDoc, deleteDoc, duplicateDoc,
   analyzeSeo, seoScore, htmlToMarkdown, slugify, htmlWordCount, mdToHtml,
@@ -213,6 +214,23 @@ export function StudioPage() {
   const [publishing, setPublishing] = useState(false);
   const [pubTarget, setPubTarget] = useState("");
   const [pubMsg, setPubMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [sel, setSel] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [selBusy, setSelBusy] = useState<string | null>(null);
+  const [toneOpen, setToneOpen] = useState(false);
+
+  const runSel = async (action: AssistAction, tone = "professional") => {
+    if (!user || !sel) return;
+    setSelBusy(action + tone);
+    try {
+      const res = await runStudioAssist(user, action, sel.text, tone);
+      editor.current?.replaceSelectionHtml(mdToHtml(res.text), action === "continue");
+      if (editor.current) onEditorChange(editor.current.getHtml());
+      toast("success", action === "continue" ? "Kept writing" : "Selection updated", `${res.words.toLocaleString()} words · counted against your plan.`);
+      refresh();
+      setSel(null); setToneOpen(false);
+    } catch (ex: unknown) { toast("error", "Assistant blocked", (ex as Error).message); }
+    setSelBusy(null);
+  };
 
   const htmlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -299,9 +317,36 @@ export function StudioPage() {
         {/* editor */}
         <div className="order-1 xl:order-2 min-w-0">
           <RichEditor ref={editor} initialHtml={doc.html} onChange={onEditorChange} onStats={setStats}
+            onSelect={(t, rect) => setSel(rect && t ? { text: t, x: rect.left + rect.width / 2, y: rect.top } : null)}
             renderLinkPopover={setUrl => (
               <LinkSuggestions keyword={seo.keyword || title} docs={user ? listDocs(user.id).filter(d => d.id !== doc.id).slice(0, 4) : []} onPick={setUrl} />
             )} />
+          {sel && (
+            <div className="fixed z-[80] animate-scale-in" style={{ left: Math.max(8, Math.min(window.innerWidth - 330, sel.x - 160)), top: Math.max(70, sel.y - (toneOpen ? 96 : 52)) }} role="toolbar" aria-label="Selection actions">
+              <div className="rounded-lg border border-border bg-popover shadow-xl px-1.5 py-1.5 flex items-center gap-0.5">
+                <span className="pl-1.5 pr-1 text-[10px] font-mono text-muted-foreground shrink-0 hidden sm:inline">AI</span>
+                {([["improve", "Improve"], ["shorten", "Shorten"], ["expand", "Expand"], ["continue", "Continue"]] as [AssistAction, string][]).map(([k, l]) => (
+                  <button key={k} onClick={() => runSel(k)} disabled={selBusy !== null}
+                    className="px-2.5 h-7 rounded-md text-[12px] font-medium hover:bg-accent transition-colors disabled:opacity-50">
+                    {selBusy === k + "professional" ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : l}
+                  </button>
+                ))}
+                <button onClick={() => setToneOpen(o => !o)} disabled={selBusy !== null}
+                  className={cn("px-2.5 h-7 rounded-md text-[12px] font-medium transition-colors disabled:opacity-50", toneOpen ? "bg-foreground text-background" : "hover:bg-accent")}>Tone</button>
+                <button onClick={() => setSel(null)} aria-label="Dismiss selection toolbar" className="w-7 h-7 rounded-md inline-flex items-center justify-center text-muted-foreground hover:bg-accent"><XIcon className="w-3.5 h-3.5" /></button>
+              </div>
+              {toneOpen && (
+                <div className="mt-1.5 rounded-lg border border-border bg-popover shadow-xl px-1.5 py-1.5 flex items-center gap-0.5 animate-fade-in">
+                  {["professional", "friendly", "persuasive", "witty"].map(t => (
+                    <button key={t} onClick={() => runSel("tone", t)} disabled={selBusy !== null}
+                      className="px-2.5 h-7 rounded-md text-[12px] font-medium capitalize hover:bg-accent transition-colors disabled:opacity-50">
+                      {selBusy === "tone" + t ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {access && access.wordsLimit !== -1 && access.wordsLimit - access.wordsUsed < 2000 && (
             <p className="mt-2 text-[12px] text-amber-600 dark:text-amber-400">Heads up: you're close to your monthly word limit — assistant generations count against it.</p>
           )}

@@ -1,5 +1,5 @@
-import React, { Suspense, lazy, useEffect } from "react";
-import { HashRouter, Route, Routes, useLocation, useParams, Link } from "react-router-dom";
+import React, { Suspense, lazy, useEffect, useMemo } from "react";
+import { HashRouter, Route, Routes, useLocation, useParams, Link, Navigate } from "react-router-dom";
 import { CheckCircle2, Info, XCircle, X } from "lucide-react";
 import { AppProvider, useApp } from "./lib/app";
 import { Button, Spinner, cn } from "./components/ui";
@@ -11,6 +11,9 @@ import { ToolsPage, ToolPage } from "./pages/Tools";
 import { DocumentsPage, StudioPage } from "./pages/Studio";
 import IntegrationsPage from "./pages/Integrations";
 import { HistoryPage, BillingPage, SettingsPage } from "./pages/Account";
+import { BlogListPage, BlogPostPage } from "./pages/Blog";
+import { listRedirectsPublic } from "./lib/content";
+import { getSettings } from "./lib/services";
 
 /* Admin is code-split — it's only needed by administrators */
 const AdminOverview = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminOverview })));
@@ -18,6 +21,7 @@ const AdminUsers = lazy(() => import("./pages/Admin").then(m => ({ default: m.Ad
 const AdminPlans = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminPlans })));
 const AdminTools = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminTools })));
 const AdminSettings = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminSettings })));
+const AdminBlog = lazy(() => import("./pages/AdminBlog"));
 
 const TITLES: [string, string][] = [
   ["/app/studio", "Content Studio"],
@@ -28,11 +32,12 @@ const TITLES: [string, string][] = [
   ["/app/settings", "Settings"],
   ["/app", "Dashboard"],
   ["/admin", "Admin"],
+  ["/blog", "Blog"],
   ["/pricing", "Pricing"],
   ["/login", "Sign in"],
   ["/register", "Create account"],
   ["/forgot", "Reset password"],
-  ["", "ChatDeck — The AI writing studio for teams that ship"],
+  ["", ""], // home — uses the admin-configured default title
 ];
 
 function ScrollToTop() {
@@ -41,19 +46,38 @@ function ScrollToTop() {
   return null;
 }
 
-/* Per-route document title + indexability (private areas stay out of search indexes) */
+/* Per-route title + indexability, driven by admin SEO settings.
+   Blog posts own their own meta (set inside BlogPostPage). */
 function PageMeta() {
   const { pathname } = useLocation();
   useEffect(() => {
-    const hit = TITLES.find(([p]) => (p === "" ? pathname === "/" : pathname.startsWith(p)));
-    const base = hit ? hit[1] : "ChatDeck";
-    document.title = hit && hit[0] === "" ? base : `${base} · ChatDeck`;
+    const seo = getSettings().seo;
     const privateArea = pathname.startsWith("/app") || pathname.startsWith("/admin");
+    const isPost = /^\/blog\/.+/.test(pathname);
+    if (!isPost) {
+      const hit = TITLES.find(([p]) => (p === "" ? pathname === "/" : pathname.startsWith(p)));
+      const base = hit ? hit[1] : seo.defaultTitle;
+      document.title = hit && hit[0] === "" ? seo.defaultTitle : `${base} · ${seo.ogSiteName}`;
+      let desc = document.querySelector<HTMLMetaElement>("meta[name=description]");
+      if (!desc) { desc = document.createElement("meta"); desc.name = "description"; document.head.appendChild(desc); }
+      desc.content = seo.defaultDescription;
+    }
     let meta = document.querySelector<HTMLMetaElement>("meta[name=robots]");
     if (!meta) { meta = document.createElement("meta"); meta.name = "robots"; document.head.appendChild(meta); }
-    meta.content = privateArea ? "noindex, nofollow" : "index, follow";
+    meta.content = privateArea || !seo.indexPublic ? "noindex, nofollow" : "index, follow";
   }, [pathname]);
   return null;
+}
+
+/* Admin-defined redirects (exact path match) */
+function RedirectGate() {
+  const { pathname } = useLocation();
+  const hit = useMemo(() => listRedirectsPublic().find(r => r.from === pathname) || null, [pathname]);
+  useEffect(() => {
+    if (hit && /^https?:\/\//.test(hit.to)) window.location.replace(hit.to);
+  }, [hit]);
+  if (!hit || /^https?:\/\//.test(hit.to)) return null;
+  return <Navigate to={hit.to} replace />;
 }
 
 function ToastHost() {
@@ -113,10 +137,13 @@ function Shell() {
     <div className={cn(adminRoute && "bg-background")}>
       <ScrollToTop />
       <PageMeta />
+      <RedirectGate />
       <Suspense fallback={<LazyFallback />}>
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/blog" element={<BlogListPage />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot" element={<ForgotPage />} />
@@ -133,6 +160,7 @@ function Shell() {
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/plans" element={<AdminPlans />} />
           <Route path="/admin/tools" element={<AdminTools />} />
+          <Route path="/admin/blog" element={<AdminBlog />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

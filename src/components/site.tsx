@@ -37,6 +37,7 @@ export function Navbar() {
     { href: "/#tools", label: "Tools" },
     { href: "/#features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
+    { href: "/blog", label: "Blog" },
     { href: "/#faq", label: "FAQ" },
   ];
   const goAnchor = (href: string) => {
@@ -127,7 +128,7 @@ export function Footer() {
           </div>
           {[
             { h: "Product", links: [["AI tools", "/#tools"], ["Pricing", "/pricing"], ["Dashboard", "/app"], ["Start free trial", "/register"]] },
-            { h: "Company", links: [["About", "/#features"], ["How it works", "/#how"], ["Testimonials", "/#testimonials"], ["FAQ", "/#faq"]] },
+            { h: "Company", links: [["Blog", "/blog"], ["About", "/#features"], ["How it works", "/#how"], ["FAQ", "/#faq"]] },
             { h: "Support", links: [["Contact", `mailto:${s.supportEmail}`], ["Sign in", "/login"], ["Reset password", "/forgot"], ["Status", "/#faq"]] },
           ].map(col => (
             <div key={col.h}>

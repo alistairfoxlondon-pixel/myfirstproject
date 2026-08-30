@@ -3,11 +3,11 @@
    validated here (never in the UI): authentication, account status,
    subscription state, plan permissions, usage and rate limits. */
 import {
-  DB, User, Plan, Tool, Subscription, Generation, Usage, Invoice, Settings,
+  DB, User, Plan, Tool, Subscription, Generation, Usage, Invoice, Settings, Post,
   getDb, mutate, uid, nowISO, daysAheadISO, monthKey, dayKey, hash, tierRank,
   setSession, getSessionUserId, freshDb, saveDb, countWords,
 } from "./db";
-import { generateOutput, hashStr } from "./ai";
+import { generateOutput, hashStr, studioTransform, AssistAction } from "./ai";
 
 export class ApiError extends Error {
   code: string;
@@ -484,6 +484,101 @@ export function adminSaveSettings(admin: User, settings: Settings): void {
 }
 export function resetDemoData(): void {
   const db = freshDb(); saveDb(db);
+}
+
+/* ================= blog (public + admin) ================= */
+const isLive = (p: Post) => p.status === "published" && new Date(p.publishAt).getTime() <= Date.now();
+export const listPublishedPosts = (): Post[] =>
+  getDb().posts.filter(isLive).sort((a, b) => b.publishAt.localeCompare(a.publishAt));
+export const getPostBySlug = (slug: string): Post | null =>
+  getDb().posts.find(p => p.slug === slug && isLive(p)) || null;
+export const listPostCategories = (): string[] =>
+  [...new Set(listPublishedPosts().map(p => p.category))];
+
+export const adminListPosts = (admin: User | null): Post[] => {
+  requireAdmin(admin);
+  return getDb().posts.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+};
+export function adminSavePost(admin: User, post: Post): Post {
+  requireAdmin(admin);
+  if (!post.title.trim()) throw new ApiError("VALIDATION", "The post needs a title.");
+  const slug = (post.slug || "").trim().toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 80);
+  if (!slug) throw new ApiError("VALIDATION", "Enter a valid URL slug.");
+  return mutate(d => {
+    const clash = d.posts.find(p => p.slug === slug && p.id !== post.id);
+    if (clash) throw new ApiError("VALIDATION", `The slug "${slug}" is already used by "${clash.title}".`);
+    const clean: Post = {
+      ...post, slug,
+      title: post.title.trim().slice(0, 140),
+      excerpt: post.excerpt.trim().slice(0, 220),
+      category: post.category.trim() || "General",
+      tags: post.tags.slice(0, 8).map(t => t.trim().toLowerCase()).filter(Boolean),
+      body: post.body.slice(0, 60000),
+      seo: {
+        title: (post.seo.title || post.title).slice(0, 70),
+        description: (post.seo.description || post.excerpt).slice(0, 160),
+        canonical: post.seo.canonical.trim(),
+      },
+      updatedAt: nowISO(),
+    };
+    const idx = d.posts.findIndex(p => p.id === post.id);
+    if (idx >= 0) d.posts[idx] = clean; else d.posts.unshift({ ...clean, id: "post_" + uid(), createdAt: nowISO() });
+    log(d, admin.name, "admin", "post.saved", `${admin.name} saved blog post "${clean.title}" (${clean.status})`);
+    return clean;
+  });
+}
+export function adminDeletePost(admin: User, id: string): void {
+  requireAdmin(admin);
+  mutate(d => {
+    const p = d.posts.find(x => x.id === id);
+    d.posts = d.posts.filter(x => x.id !== id);
+    log(d, admin.name, "admin", "post.deleted", `${admin.name} deleted blog post "${p?.title || id}"`);
+  });
+}
+
+/* Sitemap: public pages + live posts only — never /app or /admin */
+export function buildSitemap(): string {
+  const d = getDb();
+  const base = d.settings.seo.canonicalBase.replace(/\/$/, "");
+  const urls = [
+    { loc: `${base}/`, lastmod: nowISO().slice(0, 10), priority: "1.0" },
+    { loc: `${base}/#/pricing`, lastmod: nowISO().slice(0, 10), priority: "0.8" },
+    { loc: `${base}/#/blog`, lastmod: nowISO().slice(0, 10), priority: "0.9" },
+    ...d.posts.filter(isLive).map(p => ({ loc: `${base}/#/blog/${p.slug}`, lastmod: p.updatedAt.slice(0, 10), priority: "0.7" })),
+  ];
+  const body = urls.map(u => `  <url>\n    <loc>${u.loc}</loc>\n    <lastmod>${u.lastmod}</lastmod>\n    <priority>${u.priority}</priority>\n  </url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
+/* ================= in-editor assistant (server-enforced) ================= */
+export async function runStudioAssist(user: User, action: AssistAction, text: string, tone = "professional"): Promise<{ text: string; words: number }> {
+  if (user.status === "suspended") throw new ApiError("SUSPENDED", "This account is suspended. Contact support to restore access.");
+  const access = getAccess(user);
+  if (!access.plan || ["expired", "canceled", "past_due", "none"].includes(access.effective))
+    throw new ApiError("NO_SUBSCRIPTION", "An active plan or trial is required to use the writing assistant.");
+  const db = getDb();
+  const month = monthKey(nowISO());
+  const usage = db.usage.find(u => u.userId === user.id && u.month === month);
+  const out = studioTransform(action, text.slice(0, 8000), tone, hashStr(user.id + action + Date.now()));
+  const words = countWords(out);
+  if (access.plan.generationsLimit !== -1 && (usage?.generationsUsed ?? 0) + 1 > access.plan.generationsLimit)
+    throw new ApiError("GEN_LIMIT", "You've reached your monthly generation limit.");
+  if (access.plan.wordsLimit !== -1 && (usage?.wordsUsed ?? 0) + words > access.plan.wordsLimit)
+    throw new ApiError("WORD_LIMIT", "This action would exceed your monthly word limit.");
+  const lastMinute = db.generations.filter(g => g.userId === user.id && Date.now() - new Date(g.createdAt).getTime() < 60000).length;
+  if (lastMinute >= db.settings.usage.ratePerMinute)
+    throw new ApiError("RATE_LIMITED", "Too many requests — please wait a few seconds between actions.");
+  await sleep(320); // provider round-trip
+  /* atomic usage write */
+  mutate(d => {
+    const m = monthKey(nowISO());
+    let u = d.usage.find(x => x.userId === user.id && x.month === m);
+    if (!u) { u = { userId: user.id, month: m, wordsUsed: 0, generationsUsed: 0, byDay: {}, byTool: {} }; d.usage.push(u); }
+    u.wordsUsed += words; u.generationsUsed += 1;
+    u.byDay[dayKey(nowISO())] = (u.byDay[dayKey(nowISO())] || 0) + words;
+    u.byTool["studio-assist"] = (u.byTool["studio-assist"] || 0) + 1;
+  });
+  return { text: out, words };
 }
 
 /* ================= formatting helpers ================= */

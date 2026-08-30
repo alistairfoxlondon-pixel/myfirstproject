@@ -30,6 +30,53 @@ const int = (r: () => number, min: number, max: number) => min + Math.floor(r() 
 
 export const countWords = (t: string) => (t.trim().match(/\S+/g) || []).length;
 
+/* ---------- in-editor selection transforms ---------- */
+const splitSentences = (t: string) => t.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 3);
+const stripFiller = (s: string) => s
+  .replace(/\b(very|really|just|quite|basically|actually|in order to|that being said)\s+/gi, "")
+  .replace(/\s{2,}/g, " ")
+  .replace(/\bi\b/g, "I");
+
+export type AssistAction = "improve" | "shorten" | "expand" | "continue" | "tone";
+
+export function studioTransform(action: AssistAction, text: string, tone: string, seed: number): string {
+  const r = rng(hashStr(text) ^ seed);
+  const clean = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const sentences = splitSentences(clean);
+  if (action === "improve") {
+    const out = sentences.map(s => {
+      let x = stripFiller(s);
+      x = x.charAt(0).toUpperCase() + x.slice(1);
+      return x;
+    });
+    return out.join(" ");
+  }
+  if (action === "shorten") {
+    const keep = Math.max(1, Math.ceil(sentences.length * 0.6));
+    return sentences.slice(0, keep).map(stripFiller).join(" ");
+  }
+  if (action === "expand") {
+    const topicBit = clean.slice(0, 60).replace(/[.!?,;:]+$/, "").trim() || "this point";
+    const extra = pick(r, [
+      `In practice, teams that apply this to ${topicBit} see the difference within a few publishing cycles — not because any single change is dramatic, but because the compounding effect is relentless.`,
+      `It's worth being specific here: measure before and after, keep the change small enough to revert, and document what worked so the next draft starts smarter.`,
+      `A useful test is to imagine a reader skimming this section. If the core claim survives the skim, the detail that follows earns its place.`,
+    ]);
+    return `${clean} ${extra}`;
+  }
+  if (action === "continue") {
+    return pick(r, [
+      `The next step is where most drafts stall: turning the idea above into a repeatable habit. Pick one concrete action from this section, put it on the calendar, and treat the result as data — not as a verdict on the whole strategy.`,
+      `None of this requires a bigger budget or a bigger team. It requires a smaller loop: decide, draft, publish, measure, repeat. Teams that protect that loop outwrite teams that keep planning.`,
+      `Keep the momentum honest — one shipped improvement this week beats a perfect system next month. The goal is a writing process you'd happily run every single week.`,
+    ]);
+  }
+  /* tone */
+  const openers = OPENERS[tone] || OPENERS.neutral;
+  const opener = openers[Math.floor(r() * openers.length)].split("{t}").join("this topic");
+  return `${opener} ${sentences.map(stripFiller).join(" ")}`;
+}
+
 /* ---------- language banks ---------- */
 const OPENERS: Record<string, string[]> = {
   professional: [

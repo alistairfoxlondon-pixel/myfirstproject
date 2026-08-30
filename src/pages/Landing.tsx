@@ -229,14 +229,24 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ============ logos ============ */}
-      <section className="border-y border-border bg-card/40 py-6">
-        <p className="text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted-foreground mb-4">Teams writing with ChatDeck</p>
-        <LogoMarquee />
-      </section>
+      {renderSections()}
+    </PublicLayout>
+  );
 
-      {/* ============ tools ============ */}
-      <section id="tools" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 scroll-mt-20">
+  function renderSections() {
+    const order = settings.sections.filter(s => s.enabled).map(s => s.id);
+    return order.map(id => SECTION_RENDER[id] || null);
+  }
+
+  const SECTION_RENDER: Record<string, React.ReactNode> = {
+  logos: (
+    <section key="logos" className="border-y border-border bg-card/40 py-6">
+      <p className="text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted-foreground mb-4">Teams writing with ChatDeck</p>
+      <LogoMarquee />
+    </section>
+  ),
+  tools: (
+    <section key="tools" id="tools" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 scroll-mt-20">
         <SectionHead eyebrow="The deck" title={<>Every tool a content team reaches for, <em className="font-serif-accent italic font-normal">in one place</em></>} sub="Twenty-six specialized generators — each with inputs shaped for the job, not a generic prompt box." />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {tools.map((t, i) => (

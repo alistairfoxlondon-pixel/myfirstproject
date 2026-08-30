@@ -24,7 +24,9 @@ export interface PublishLog {
   status: "sent" | "failed"; message: string; payload: string; createdAt: string;
 }
 
-interface ContentStore { version: number; docs: Doc[]; integrations: UserIntegration[]; publishLogs: PublishLog[]; resets: { email: string; code: string; expiresAt: string }[]; }
+export interface Redirect { id: string; from: string; to: string; createdAt: string; }
+
+interface ContentStore { version: number; docs: Doc[]; integrations: UserIntegration[]; publishLogs: PublishLog[]; resets: { email: string; code: string; expiresAt: string }[]; redirects: Redirect[]; }
 
 const CKEY = "chatdeck.content.v1";
 let ccache: ContentStore | null = null;
@@ -32,11 +34,17 @@ function getStore(): ContentStore {
   if (ccache) return ccache;
   try {
     const raw = localStorage.getItem(CKEY);
-    if (raw) { ccache = JSON.parse(raw) as ContentStore; return ccache; }
+    if (raw) {
+      const parsed = JSON.parse(raw) as ContentStore;
+      /* forward-compat for older stores */
+      if (!parsed.redirects) parsed.redirects = [];
+      ccache = parsed;
+      return ccache;
+    }
   } catch { /* reseed */ }
-  ccache = { version: 1, docs: seedDocs(), integrations: [], publishLogs: [], resets: [] };
-  saveStore(ccache);
-  return ccache;
+  const store: ContentStore = { version: 1, docs: seedDocs(), integrations: [], publishLogs: [], resets: [], redirects: [] };
+  saveStore(store);
+  return store;
 }
 function saveStore(s: ContentStore) { ccache = s; try { localStorage.setItem(CKEY, JSON.stringify(s)); } catch { /* quota */ } }
 function mutateC<T>(fn: (s: ContentStore) => T): T { const s = getStore(); const out = fn(s); saveStore(s); return out; }
@@ -442,6 +450,32 @@ export function externalSuggestions(topic: string): { label: string; url: string
   const scored = all.map(s => ({ ...s, score: s.match.filter(m => t.includes(m)).length }));
   return scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 3)
     .map(({ label, url, why }) => ({ label, url, why }));
+}
+
+/* ================= redirects ================= */
+export function listRedirectsPublic(): Redirect[] {
+  return getStore().redirects;
+}
+export function adminListRedirects(admin: { role: string } | null): Redirect[] {
+  if (!admin || admin.role !== "admin") throw new ApiError("FORBIDDEN", "Administrator access required.");
+  return getStore().redirects;
+}
+export function adminAddRedirect(admin: { role: string; name: string } | null, from: string, to: string): Redirect {
+  if (!admin || admin.role !== "admin") throw new ApiError("FORBIDDEN", "Administrator access required.");
+  const f = from.trim(), t = to.trim();
+  if (!f.startsWith("/") && !f.startsWith("http")) throw new ApiError("VALIDATION", "Source must start with / (or be a full URL).");
+  if (!t.startsWith("/") && !t.startsWith("http") && !t.startsWith("#")) throw new ApiError("VALIDATION", "Target must start with /, # or be a full URL.");
+  if (f === t) throw new ApiError("VALIDATION", "Source and target are identical.");
+  return mutateC(s => {
+    if (s.redirects.some(r => r.from === f)) throw new ApiError("VALIDATION", "A redirect for that source already exists.");
+    const rec: Redirect = { id: "red_" + uid(), from: f, to: t, createdAt: nowISO() };
+    s.redirects.unshift(rec);
+    return rec;
+  });
+}
+export function adminDeleteRedirect(admin: { role: string } | null, id: string): void {
+  if (!admin || admin.role !== "admin") throw new ApiError("FORBIDDEN", "Administrator access required.");
+  mutateC(s => { s.redirects = s.redirects.filter(r => r.id !== id); });
 }
 
 /* ================= seed documents for the demo account ================= */
