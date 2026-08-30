@@ -220,7 +220,7 @@ export default function Landing() {
     ),
     tools: (
       <section key="tools" id="tools" className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-28 scroll-mt-20">
-        <SectionHead eyebrow="The deck" title={<>Every tool a content team reaches for, <em className="font-serif-accent italic font-normal">in one place</em></>} sub="Twenty-six specialized generators — each with inputs shaped for the job, not a generic prompt box." />
+        <SectionHead eyebrow="The deck" title={<>Every tool a content team reaches for, <em className="font-serif-accent italic font-normal">in one place</em></>} sub={`${db.tools.filter(t => t.active).length} specialized generators across writing, SEO, social, business and research — each with inputs shaped for the job, not a generic prompt box.`} />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {tools.map((t, i) => (
             <Reveal key={t.slug} delay={(i % 4) * 70}>

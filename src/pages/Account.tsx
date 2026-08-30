@@ -1,15 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, Copy, RotateCcw, Trash2, CreditCard, Check, AlertTriangle, History as HistoryIcon, Receipt, ArrowRight } from "lucide-react";
+import { ChevronDown, Copy, RotateCcw, Trash2, CreditCard, Check, AlertTriangle, History as HistoryIcon, Receipt, ArrowRight, Mic, Pencil } from "lucide-react";
 import AppShell from "./AppShell";
 import { ToolIcon } from "../components/icons";
-import { Badge, Button, Card, CopyBtn, EmptyState, Field, Input, Modal, Progress, RichText, Select, cn } from "../components/ui";
+import { Badge, Button, Card, CopyBtn, EmptyState, Field, Input, Modal, Progress, RichText, Select, Switch, Textarea, cn } from "../components/ui";
 import { useApp } from "../lib/app";
-import { getDb, Plan, dayKey, monthKey, nowISO } from "../lib/db";
+import { getDb, Plan, BrandVoice as BrandVoiceRow, dayKey, monthKey, nowISO } from "../lib/db";
 import {
-  cancelAtPeriodEnd, changePassword, deleteAccount, deleteGeneration, fmtDate, fmtDateTime,
-  fmtLimit, fmtMoney, fmtNum, listGenerations, listInvoices, resumeSubscription, retryPayment,
-  subscribe, updateProfile,
+  cancelAtPeriodEnd, changePassword, deleteAccount, deleteGeneration, deleteBrandVoice, fmtDate, fmtDateTime,
+  fmtLimit, fmtMoney, fmtNum, listBrandVoices, listGenerations, listInvoices, resumeSubscription, retryPayment,
+  saveBrandVoice, subscribe, updateProfile,
 } from "../lib/services";
 
 /* ================= history ================= */
@@ -376,6 +376,7 @@ export function SettingsPage() {
         </div>
 
         <div className="space-y-3.5">
+          <BrandVoiceCard />
           <Card className="p-5 sm:p-6">
             <h2 className="font-display font-bold text-[15.5px] tracking-tight mb-1">Security</h2>
             <p className="text-[12.5px] text-muted-foreground mb-5">Passwords are hashed — never stored in plain text.</p>
@@ -431,5 +432,94 @@ export function SettingsPage() {
         </div>
       </Modal>
     </AppShell>
+  );
+}
+
+/* ================= brand voice ================= */
+const EMPTY_VOICE = { name: "", tone: "professional", audience: "", industry: "", preferred: "", forbidden: "", rules: "", active: false };
+
+function BrandVoiceCard() {
+  const { user, toast, refresh } = useApp();
+  const [voices, setVoices] = useState<BrandVoiceRow[]>(() => (user ? listBrandVoices(user.id) : []));
+  const [edit, setEdit] = useState<(typeof EMPTY_VOICE & { id?: string }) | null>(null);
+  const [del, setDel] = useState<BrandVoiceRow | null>(null);
+  if (!user) return null;
+  const reload = () => setVoices(listBrandVoices(user.id));
+
+  const save = () => {
+    if (!edit) return;
+    try {
+      saveBrandVoice(user, { ...edit });
+      toast("success", "Brand voice saved", edit.active ? "It will shape your AI output now." : "Activate it to apply it to AI output.");
+      setEdit(null); reload(); refresh();
+    } catch (e) { toast("error", (e as Error).message); }
+  };
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <div>
+          <h2 className="font-display font-bold text-[15.5px] tracking-tight flex items-center gap-2"><Mic className="w-4 h-4 text-muted-foreground" /> Brand voice</h2>
+          <p className="text-[12.5px] text-muted-foreground mt-1">Teach the AI how you sound. The active voice is applied to every generation.</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setEdit({ ...EMPTY_VOICE })}><Pencil className="w-3.5 h-3.5" /> New voice</Button>
+      </div>
+
+      {voices.length === 0 ? (
+        <p className="text-[13px] text-muted-foreground mt-4 rounded-lg border border-dashed border-border px-4 py-5 text-center">
+          No voices yet. Create one with your tone, audience and word preferences.
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-2.5">
+          {voices.map(v => (
+            <li key={v.id} className="rounded-lg border border-border px-4 py-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13.5px] font-semibold flex items-center gap-2">{v.name} {v.active && <Badge tone="success">active</Badge>}</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5 truncate">
+                    {v.tone}{v.industry ? ` · ${v.industry}` : ""}{v.audience ? ` · for ${v.audience}` : ""}
+                  </p>
+                </div>
+                <label className="sr-only" htmlFor={`bv-${v.id}`}>Set {v.name} active</label>
+                <Switch checked={v.active} onChange={val => {
+                  try { saveBrandVoice(user, { ...v, active: val }); reload(); refresh(); toast("info", val ? `${v.name} is now active` : `${v.name} deactivated`); }
+                  catch (e) { toast("error", (e as Error).message); }
+                }} />
+                <button onClick={() => setEdit({ ...v })} aria-label={`Edit ${v.name}`} className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"><Pencil className="w-4 h-4" /></button>
+                <button onClick={() => setDel(v)} aria-label={`Delete ${v.name}`} className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-4 h-4" /></button>
+              </div>
+              {v.rules && <p className="text-[12px] text-muted-foreground mt-2 pt-2 border-t border-border leading-snug line-clamp-2">{v.rules}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? "Edit brand voice" : "New brand voice"} wide
+        footer={<><Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button><Button onClick={save}><Check className="w-4 h-4" /> Save voice</Button></>}>
+        {edit && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Name" required><Input value={edit.name} onChange={e => setEdit(v => ({ ...v!, name: e.target.value }))} placeholder="e.g. Main brand" /></Field>
+            <Field label="Tone"><Select value={edit.tone} onChange={e => setEdit(v => ({ ...v!, tone: e.target.value }))}
+              options={["professional", "friendly", "persuasive", "witty", "neutral", "bold", "empathetic"]} /></Field>
+            <Field label="Audience"><Input value={edit.audience} onChange={e => setEdit(v => ({ ...v!, audience: e.target.value }))} placeholder="e.g. busy marketing leads" /></Field>
+            <Field label="Industry"><Input value={edit.industry} onChange={e => setEdit(v => ({ ...v!, industry: e.target.value }))} placeholder="e.g. B2B SaaS" /></Field>
+            <Field label="Preferred words" help="Comma separated — the AI leans on these."><Input value={edit.preferred} onChange={e => setEdit(v => ({ ...v!, preferred: e.target.value }))} placeholder="e.g. practical, honest, proven" /></Field>
+            <Field label="Forbidden words" help="Comma separated — never used."><Input value={edit.forbidden} onChange={e => setEdit(v => ({ ...v!, forbidden: e.target.value }))} placeholder="e.g. game-changer, revolutionary" /></Field>
+            <div className="sm:col-span-2">
+              <Field label="Writing rules" help="Plain-language guidance applied to every output."><Textarea rows={3} value={edit.rules} onChange={e => setEdit(v => ({ ...v!, rules: e.target.value }))} placeholder="e.g. Short sentences. No jargon. Always end with a concrete next step." /></Field>
+            </div>
+            <label className="sm:col-span-2 flex items-center gap-2.5 text-[13px] font-medium">
+              <Switch checked={edit.active} onChange={val => setEdit(v => ({ ...v!, active: val }))} /> Make this the active voice
+            </label>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!del} onClose={() => setDel(null)} title={`Delete "${del?.name}"?`}
+        footer={<><Button variant="ghost" onClick={() => setDel(null)}>Cancel</Button>
+          <Button variant="destructive" onClick={() => { if (del) { deleteBrandVoice(user, del.id); reload(); refresh(); toast("info", "Brand voice deleted"); } setDel(null); }}><Trash2 className="w-4 h-4" /> Delete</Button></>}>
+        <p className="text-[13.5px] text-muted-foreground leading-relaxed">AI output will no longer use this voice.</p>
+      </Modal>
+    </Card>
   );
 }

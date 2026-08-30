@@ -1,7 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   Bold, Italic, Underline, Strikethrough, List, ListOrdered, Quote, Link2, AlignLeft, AlignCenter,
-  Undo2, Redo2, Code2, RemoveFormatting, Check, Minus,
+  Undo2, Redo2, Code2, RemoveFormatting, Check, Minus, Table2, Search, ImagePlus,
 } from "lucide-react";
 import { Button, cn } from "./ui";
 import { sanitizeHtml } from "../lib/content";
@@ -43,6 +43,10 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [block, setBlock] = useState("p");
+  const [findOpen, setFindOpen] = useState(false);
+  const [findText, setFindText] = useState("");
+  const [replaceText, setReplaceText] = useState("");
+  const [replaceCount, setReplaceCount] = useState<number | null>(null);
   const [stats, setStats] = useState({ words: 0, chars: 0, readMin: 0 });
 
   /* mount once — never let React re-render the contentEditable body */
@@ -166,6 +170,49 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
     }
   };
 
+  /* ---------- find & replace (text-node safe) ---------- */
+  const replaceAllInBody = (find: string, rep: string): number => {
+    const el = bodyRef.current;
+    if (!el || !find) return 0;
+    let count = 0;
+    const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    let n: Node | null;
+    while ((n = walk.nextNode())) nodes.push(n as Text);
+    for (const node of nodes) {
+      if (!node.nodeValue || !node.nodeValue.includes(find)) continue;
+      count += node.nodeValue.split(find).length - 1;
+      node.nodeValue = node.nodeValue.split(find).join(rep);
+    }
+    if (count) emit();
+    return count;
+  };
+
+  /* ---------- table ---------- */
+  const insertTable = () => {
+    const rows = [0, 1, 2].map(() => `<tr>${[0, 1, 2].map(() => `<td>&nbsp;</td>`).join("")}</tr>`).join("");
+    saveSelection();
+    bodyRef.current?.focus();
+    restoreSelection();
+    document.execCommand("insertHTML", false, `<table style="border-collapse:collapse;width:100%;margin:0.8em 0">${rows}</table><p><br></p>`);
+    emit();
+  };
+
+  /* ---------- image drag & drop ---------- */
+  const [dragOver, setDragOver] = useState(false);
+  const insertImageFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 2_500_000) { alert("Keep images under 2.5 MB so drafts stay light."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result);
+      bodyRef.current?.focus();
+      document.execCommand("insertHTML", false, `<p><img src="${src}" alt="" style="max-width:100%;border-radius:8px" /></p>`);
+      emit();
+    };
+    reader.readAsDataURL(file);
+  };
+
   /* keyboard shortcuts */
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey)) return;
@@ -204,6 +251,8 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
         <TBtn title="Align center" onClick={() => exec("justifyCenter")}><AlignCenter className="w-4 h-4" /></TBtn>
         <Sep />
         <TBtn title="Horizontal rule" onClick={() => exec("insertHorizontalRule")}><Minus className="w-4 h-4" /></TBtn>
+        <TBtn title="Insert table" onClick={insertTable}><Table2 className="w-4 h-4" /></TBtn>
+        <TBtn title="Find & replace" onClick={() => setFindOpen(o => !o)} on={findOpen}><Search className="w-4 h-4" /></TBtn>
         <TBtn title="Clear formatting" onClick={() => { exec("removeFormat"); exec("formatBlock", "p"); }}><RemoveFormatting className="w-4 h-4" /></TBtn>
         <span className="flex-1" />
         <TBtn title="Undo" onClick={() => exec("undo")}><Undo2 className="w-4 h-4" /></TBtn>
@@ -226,6 +275,22 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
         </div>
       )}
 
+      {/* find & replace panel */}
+      {findOpen && (
+        <div className="px-3 py-3 border-b border-border bg-popover animate-fade-in space-y-2.5">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input value={findText} onChange={e => { setFindText(e.target.value); setReplaceCount(null); }} placeholder="Find…" aria-label="Find text"
+              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring/60" />
+            <input value={replaceText} onChange={e => { setReplaceText(e.target.value); setReplaceCount(null); }} placeholder="Replace with…" aria-label="Replace with"
+              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-ring/60" />
+            <Button size="sm" className="h-9" disabled={!findText} onClick={() => setReplaceCount(replaceAllInBody(findText, replaceText))}>Replace all</Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground font-mono">
+            {replaceCount === null ? "Replaces exact text matches across the whole document." : `Replaced ${replaceCount} occurrence${replaceCount === 1 ? "" : "s"}.`}
+          </p>
+        </div>
+      )}
+
       {/* body */}
       {source ? (
         <textarea value={srcText} onChange={e => setSrcText(e.target.value)} spellCheck={false} aria-label="HTML source"
@@ -238,13 +303,22 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
           aria-multiline="true"
           aria-label="Document editor"
           data-placeholder={placeholder || "Start writing, or generate a draft with the assistant…"}
-          className="prose-doc min-h-[420px] max-h-[62vh] overflow-y-auto studio-scroll px-5 sm:px-8 py-6 focus:outline-none"
+          className={cn("prose-doc min-h-[420px] max-h-[62vh] overflow-y-auto studio-scroll px-5 sm:px-8 py-6 focus:outline-none transition-colors", dragOver && "bg-accent/40")}
           onInput={emit}
           onKeyUp={e => { detectBlock(); if (e.key.startsWith("Arrow") || e.key === "Shift") emitSelection(); }}
           onMouseUp={() => { detectBlock(); saveSelection(); emitSelection(); }}
           onKeyDown={e => { onKeyDown(e); }}
+          onDragOver={e => { if (Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); setDragOver(true); } }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => {
+            const file = e.dataTransfer.files?.[0];
+            if (file && file.type.startsWith("image/")) { e.preventDefault(); setDragOver(false); insertImageFile(file); }
+          }}
           onPaste={e => {
             e.preventDefault();
+            /* pasted screenshot → insert as inline image */
+            const imgFile = Array.from(e.clipboardData.files).find(f => f.type.startsWith("image/"));
+            if (imgFile) { insertImageFile(imgFile); return; }
             const html = e.clipboardData.getData("text/html");
             const text = e.clipboardData.getData("text/plain");
             document.execCommand("insertHTML", false, html ? sanitizeHtml(html) : text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>"));

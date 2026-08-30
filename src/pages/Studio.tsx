@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, FileText, Plus, Search, Trash2, Copy as CopyIcon, Star, Sparkles, Wand2, ListTree,
+  ArrowLeft, FileText, Plus, Search, Trash2, Copy as CopyIcon, Sparkles, Wand2, ListTree,
   Image as ImageIcon, Send, Download, CheckCircle2, XCircle, Globe, Ghost, PenLine, LayoutGrid,
   RefreshCw, Save, ExternalLink, Link2, Clock3, Loader2 as LoaderCircle, X as XIcon,
+  Archive, ArchiveRestore,
 } from "lucide-react";
 import AppShell from "./AppShell";
 import { RichEditor, EditorHandle } from "../components/editor";
@@ -12,7 +13,7 @@ import { useApp } from "../lib/app";
 import { generate, fmtDateTime, runStudioAssist } from "../lib/services";
 import type { AssistAction } from "../lib/ai";
 import {
-  Doc, listDocs, getDoc, createDoc, saveDoc, deleteDoc, duplicateDoc,
+  Doc, listDocs, getDoc, createDoc, saveDoc, deleteDoc, duplicateDoc, archiveDoc,
   analyzeSeo, seoScore, htmlToMarkdown, slugify, htmlWordCount, mdToHtml,
   listIntegrations, publishDoc, listPublishLogs, externalSuggestions, CONNECTORS,
 } from "../lib/content";
@@ -34,10 +35,12 @@ export function DocumentsPage() {
   const { user } = useApp();
   const nav = useNavigate();
   const [q, setQ] = useState("");
+  const [view, setView] = useState<"active" | "archived">("active");
   const [del, setDel] = useState<Doc | null>(null);
   const [, bump] = useState(0);
   if (!user) return null;
-  const docs = listDocs(user.id).filter(d => (d.title + d.seo.keyword).toLowerCase().includes(q.toLowerCase()));
+  const archived = view === "archived";
+  const docs = listDocs(user.id, { includeArchived: archived }).filter(d => (d.title + d.seo.keyword).toLowerCase().includes(q.toLowerCase()));
 
   const newDoc = () => {
     const d = createDoc(user.id, { title: "Untitled document" });
@@ -51,14 +54,24 @@ export function DocumentsPage() {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={e => setQ(e.target.value)} placeholder="Search documents…" className="pl-9" aria-label="Search documents" />
         </div>
-        <Button onClick={newDoc} className="sm:ml-auto"><Plus className="w-4 h-4" /> New document</Button>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <div className="inline-flex rounded-lg border border-border overflow-hidden" role="tablist" aria-label="Document filter">
+            {([["active", "Active"], ["archived", "Archived"]] as const).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)}
+                className={cn("px-3.5 h-9 text-[13px] font-medium transition-colors",
+                  view === k ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+            ))}
+          </div>
+          <Button onClick={newDoc}><Plus className="w-4 h-4" /> New document</Button>
+        </div>
       </div>
 
       {docs.length === 0 ? (
         <Card>
-          <EmptyState icon={<FileText className="w-5 h-5" />} title={q ? "No matches" : "No documents yet"}
-            body={q ? "Try a different search term." : "Create a blank document, or save any AI generation as a draft and edit it here with the full SEO workspace."}
-            action={q ? <Button variant="outline" onClick={() => setQ("")}>Clear search</Button> : <Button onClick={newDoc}><Plus className="w-4 h-4" /> Create your first document</Button>} />
+          <EmptyState icon={archived ? <Archive className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+            title={q ? "No matches" : archived ? "Nothing archived" : "No documents yet"}
+            body={q ? "Try a different search term." : archived ? "Archived documents are kept safe here, out of your way." : "Create a blank document, or save any AI generation as a draft and edit it here with the full SEO workspace."}
+            action={q ? <Button variant="outline" onClick={() => setQ("")}>Clear search</Button> : archived ? <Button variant="outline" onClick={() => setView("active")}>Back to active</Button> : <Button onClick={newDoc}><Plus className="w-4 h-4" /> Create your first document</Button>} />
         </Card>
       ) : (
         <div className="grid gap-2.5">
@@ -76,8 +89,17 @@ export function DocumentsPage() {
                 </p>
               </button>
               <div className="flex items-center gap-1 shrink-0">
-                <button title="Duplicate" aria-label={`Duplicate ${d.title}`} onClick={() => { duplicateDoc(user.id, d.id); bump(x => x + 1); }}
-                  className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"><CopyIcon className="w-4 h-4" /></button>
+                {archived ? (
+                  <button title="Restore" aria-label={`Restore ${d.title}`} onClick={() => { archiveDoc(user.id, d.id, false); bump(x => x + 1); }}
+                    className="p-2 rounded-md text-muted-foreground hover:text-emerald-600 hover:bg-emerald-600/10 transition-colors"><ArchiveRestore className="w-4 h-4" /></button>
+                ) : (
+                  <>
+                    <button title="Duplicate" aria-label={`Duplicate ${d.title}`} onClick={() => { duplicateDoc(user.id, d.id); bump(x => x + 1); }}
+                      className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"><CopyIcon className="w-4 h-4" /></button>
+                    <button title="Archive" aria-label={`Archive ${d.title}`} onClick={() => { archiveDoc(user.id, d.id, true); bump(x => x + 1); }}
+                      className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"><Archive className="w-4 h-4" /></button>
+                  </>
+                )}
                 <button title="Delete" aria-label={`Delete ${d.title}`} onClick={() => setDel(d)}
                   className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="w-4 h-4" /></button>
               </div>
@@ -526,14 +548,4 @@ function LinkSuggestions({ keyword, docs, onPick }: { keyword: string; docs: Doc
   );
 }
 
-/* ================= tools-library integration: recommended row ================= */
-export function FavStar({ on, onClick, label }: { on: boolean; onClick(): void; label: string }) {
-  return (
-    <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label={on ? `Remove ${label} from favorites` : `Add ${label} to favorites`} aria-pressed={on}
-      className={cn("p-1.5 rounded-md transition-all", on ? "text-amber-500" : "text-muted-foreground/50 hover:text-foreground")}>
-      <Star className="w-4 h-4" fill={on ? "currentColor" : "none"} />
-    </button>
-  );
-}
 
-export { ToolIcon };

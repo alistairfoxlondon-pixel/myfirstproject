@@ -5,7 +5,7 @@ import {
   Columns, CheckCircle2, Zap,
 } from "lucide-react";
 import AppShell from "./AppShell";
-import { FavStar } from "./Studio";
+import { FavStar } from "../components/ui";
 import { ToolIcon, CATEGORY_META } from "../components/icons";
 import { Badge, Button, Card, CopyBtn, EmptyState, Field, Input, RichText, Select, Textarea, cn } from "../components/ui";
 import { useApp } from "../lib/app";
@@ -26,6 +26,19 @@ const SAMPLES: Record<string, Record<string, string>> = {
   niche: { niche: "personal finance for creatives" },
   seed_keyword: { seed_keyword: "ai writing tools" },
   company: { company: "Brightloop" },
+  audience: { audience: "SaaS founders and busy marketing leads" },
+  project: { project: "SEO retainer for a DTC skincare brand" },
+  client: { client: "Harbor & Sage" },
+  role: { role: "Content Strategist" },
+  meeting: { meeting: "Q3 planning sync" },
+  notes: { notes: "Launch templates library in October\nHire a freelance editor\nCut review cycle from 5 days to 2" },
+  process: { process: "Weekly content publish" },
+  url: { url: "/blog/pricing-guide" },
+  competitors: { competitors: "Jasper, Copy.ai, Writesonic" },
+  campaign: { campaign: "Spring launch of the analytics dashboard" },
+  quote_person: { quote_person: "Elena Petrova, CEO" },
+  author: { author: "Amara Fields" },
+  brand: { brand: "ChatDeck" },
 };
 
 function useTool(slug: string | undefined): Tool | null {

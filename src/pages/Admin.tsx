@@ -23,6 +23,7 @@ const NAV = [
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/plans", label: "Plans", icon: CreditCard },
   { to: "/admin/tools", label: "AI Tools", icon: Blocks },
+  { to: "/admin/models", label: "AI Models", icon: Cpu },
   { to: "/admin/blog", label: "Blog", icon: Newspaper },
   { to: "/admin/settings", label: "Settings", icon: SettingsIcon },
 ];

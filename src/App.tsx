@@ -7,11 +7,17 @@ import { PublicLayout } from "./components/site";
 import Landing from "./pages/Landing";
 import { LoginPage, RegisterPage, ForgotPage, PricingPage } from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
-import { ToolsPage, ToolPage } from "./pages/Tools";
-import { DocumentsPage, StudioPage } from "./pages/Studio";
 import IntegrationsPage from "./pages/Integrations";
-import { HistoryPage, BillingPage, SettingsPage } from "./pages/Account";
 import { BlogListPage, BlogPostPage } from "./pages/Blog";
+
+/* Heavy app surfaces are code-split so marketing/auth pages stay light */
+const ToolsPage = lazy(() => import("./pages/Tools").then(m => ({ default: m.ToolsPage })));
+const ToolPage = lazy(() => import("./pages/Tools").then(m => ({ default: m.ToolPage })));
+const DocumentsPage = lazy(() => import("./pages/Studio").then(m => ({ default: m.DocumentsPage })));
+const StudioPage = lazy(() => import("./pages/Studio").then(m => ({ default: m.StudioPage })));
+const HistoryPage = lazy(() => import("./pages/Account").then(m => ({ default: m.HistoryPage })));
+const BillingPage = lazy(() => import("./pages/Account").then(m => ({ default: m.BillingPage })));
+const SettingsPage = lazy(() => import("./pages/Account").then(m => ({ default: m.SettingsPage })));
 import { listRedirectsPublic } from "./lib/content";
 import { getSettings } from "./lib/services";
 
@@ -22,10 +28,13 @@ const AdminPlans = lazy(() => import("./pages/Admin").then(m => ({ default: m.Ad
 const AdminTools = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminTools })));
 const AdminSettings = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminSettings })));
 const AdminBlog = lazy(() => import("./pages/AdminBlog"));
+const AdminModels = lazy(() => import("./pages/Admin").then(m => ({ default: m.AdminModels })));
+const SocialPage = lazy(() => import("./pages/Social"));
 
 const TITLES: [string, string][] = [
   ["/app/studio", "Content Studio"],
   ["/app/tools", "AI Tools"],
+  ["/app/social", "Social Studio"],
   ["/app/history", "History"],
   ["/app/integrations", "Integrations"],
   ["/app/billing", "Billing"],
@@ -176,6 +185,7 @@ function Shell() {
           <Route path="/app" element={<Dashboard />} />
           <Route path="/app/studio" element={<DocumentsPage />} />
           <Route path="/app/studio/:docId" element={<StudioRoute />} />
+          <Route path="/app/social" element={<SocialPage />} />
           <Route path="/app/tools" element={<ToolsPage />} />
           <Route path="/app/tools/:slug" element={<ToolRoute />} />
           <Route path="/app/integrations" element={<IntegrationsPage />} />
@@ -187,6 +197,7 @@ function Shell() {
           <Route path="/admin/plans" element={<AdminPlans />} />
           <Route path="/admin/tools" element={<AdminTools />} />
           <Route path="/admin/blog" element={<AdminBlog />} />
+          <Route path="/admin/models" element={<AdminModels />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

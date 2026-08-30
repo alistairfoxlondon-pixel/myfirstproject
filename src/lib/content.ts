@@ -16,6 +16,7 @@ export interface Doc {
   seo: DocSeo; cover: DocImage | null; images: DocImage[];
   source: { kind: "generation" | "blank"; toolSlug?: string; generationId?: string };
   status: "draft" | "published";
+  archived?: boolean;
   wordCount: number; createdAt: string; updatedAt: string;
 }
 export interface UserIntegration { id: string; userId: string; connector: string; config: Record<string, string>; connectedAt: string; }
@@ -189,8 +190,18 @@ const own = (s: ContentStore, userId: string, docId: string): Doc => {
   return doc;
 };
 
-export function listDocs(userId: string): Doc[] {
-  return getStore().docs.filter(d => d.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+export function listDocs(userId: string, opts?: { includeArchived?: boolean }): Doc[] {
+  return getStore().docs
+    .filter(d => d.userId === userId && (opts?.includeArchived ? true : !d.archived))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+export function archiveDoc(userId: string, docId: string, archived: boolean): Doc {
+  return mutateC(s => {
+    const doc = own(s, userId, docId);
+    doc.archived = archived;
+    doc.updatedAt = nowISO();
+    return { ...doc };
+  });
 }
 export function getDoc(userId: string, docId: string): Doc {
   return own(getStore(), userId, docId);

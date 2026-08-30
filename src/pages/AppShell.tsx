@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Navigate, NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Blocks, History, CreditCard, Settings, LogOut, Menu, X, ArrowRight, AlertTriangle, Clock3, Plus, LockKeyhole, BookOpen, Plug } from "lucide-react";
+import { LayoutDashboard, Blocks, History, CreditCard, Settings, LogOut, Menu, X, ArrowRight, AlertTriangle, Clock3, Plus, LockKeyhole, BookOpen, Plug, Share2 } from "lucide-react";
 import { Logo } from "../components/icons";
 import { Badge, Button, Progress, cn } from "../components/ui";
 import { ThemeToggle } from "../components/site";
@@ -12,6 +12,7 @@ const NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/app/studio", label: "Content Studio", icon: BookOpen },
   { to: "/app/tools", label: "AI Tools", icon: Blocks },
+  { to: "/app/social", label: "Social Studio", icon: Share2 },
   { to: "/app/history", label: "History", icon: History },
   { to: "/app/integrations", label: "Integrations", icon: Plug },
   { to: "/app/billing", label: "Billing", icon: CreditCard },

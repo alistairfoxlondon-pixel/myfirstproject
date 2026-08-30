@@ -344,6 +344,9 @@ html, body { overflow-x: clip; }
 }
 .prose-doc img { border-radius: 8px; border: 1px solid var(--border); max-width: 100%; margin: 0.9em 0; }
 .prose-doc hr { border: none; border-top: 1px solid var(--border); margin: 1.6em 0; }
+.prose-doc table { border-collapse: collapse; width: 100%; margin: 0.9em 0; font-size: 0.92em; }
+.prose-doc td, .prose-doc th { border: 1px solid var(--border); padding: 0.45em 0.7em; min-width: 3em; }
+.prose-doc tr:nth-child(even) td { background: color-mix(in oklab, var(--muted) 50%, transparent); }
 .prose-doc [style*="text-align: center"] { text-align: center; }
 
 /* ---------- studio layout ---------- */

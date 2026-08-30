@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, Type, Zap, CalendarClock, Blocks, Sparkles, FileText, Plus } from "lucide-react";
 import AppShell from "./AppShell";
-import { FavStar } from "./Studio";
+import { FavStar } from "../components/ui";
 import { CATEGORY_META, ToolIcon } from "../components/icons";
 import { AreaChart, Badge, Button, Card, Donut, EmptyState, Progress, Reveal, cn } from "../components/ui";
 import { useApp } from "../lib/app";

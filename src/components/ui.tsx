@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, Star, X } from "lucide-react";
 import { useReveal } from "../lib/app";
 
 export const cn = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
@@ -351,5 +351,15 @@ export function RichText({ text, className = "" }: { text: string; className?: s
         return <p key={i}>{inline(line, i)}</p>;
       })}
     </div>
+  );
+}
+
+/* ---------- favorite star ---------- */
+export function FavStar({ on, onClick, label }: { on: boolean; onClick(): void; label: string }) {
+  return (
+    <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label={on ? `Remove ${label} from favorites` : `Add ${label} to favorites`} aria-pressed={on}
+      className={cn("p-1.5 rounded-md transition-all", on ? "text-amber-500" : "text-muted-foreground/50 hover:text-foreground")}>
+      <Star className="w-4 h-4" fill={on ? "currentColor" : "none"} />
+    </button>
   );
 }
