@@ -301,7 +301,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   line-height: 1.8;
   color: var(--foreground);
   caret-color: var(--foreground);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
+.prose-doc pre { white-space: pre-wrap; overflow-wrap: break-word; }
 .prose-doc:empty::before {
   content: attr(data-placeholder);
   color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);

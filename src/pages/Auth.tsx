@@ -23,7 +23,7 @@ function AuthShell({ title, sub, children, footer }: { title: string; sub: React
           {footer && <Reveal delay={160}><div className="mt-6">{footer}</div></Reveal>}
         </div>
         <Reveal delay={180} className="hidden lg:block sticky top-28">
-          <div className="relative rounded-2xl border border-border bg-card p-8 overflow-hidden noise">
+          <div className="relative rounded-xl border border-border bg-card p-8 overflow-hidden noise">
             <div className="absolute inset-0 dot-grid opacity-60" aria-hidden />
             <div className="relative">
               <Logo size={30} withWord={false} />

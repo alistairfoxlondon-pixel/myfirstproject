@@ -38,7 +38,7 @@ function HeroDeck() {
   return (
     <div className="relative">
       <div className="absolute -inset-6 rounded-3xl bg-foreground/[0.04] blur-2xl" aria-hidden />
-      <div className="relative rounded-2xl border border-border bg-card shadow-xl shadow-black/5 overflow-hidden shimmer-border">
+      <div className="relative rounded-xl border border-border bg-card shadow-xl shadow-black/5 overflow-hidden shimmer-border">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/40">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-foreground/15" /><span className="w-2.5 h-2.5 rounded-full bg-foreground/15" /><span className="w-2.5 h-2.5 rounded-full bg-foreground/15" />
@@ -54,10 +54,10 @@ function HeroDeck() {
               {s.prompt}
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 min-w-0">
             <div className="w-7 h-7 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 mt-0.5"><Zap className="w-3.5 h-3.5" /></div>
-            <div className="rounded-xl rounded-tl-sm border border-border bg-background px-3.5 py-2.5 text-[13px] font-mono leading-relaxed min-h-[96px] flex-1">
-              <pre className="whitespace-pre-wrap font-mono text-[12.5px]">{full.slice(0, chars)}{phase === "typing" && <span className="inline-block w-[7px] h-[14px] bg-foreground align-middle ml-0.5 animate-caret" />}</pre>
+            <div className="rounded-xl rounded-tl-sm border border-border bg-background px-3.5 py-2.5 text-[13px] font-mono leading-relaxed min-h-[96px] flex-1 min-w-0">
+              <pre className="whitespace-pre-wrap break-words font-mono text-[12.5px]">{full.slice(0, chars)}{phase === "typing" && <span className="inline-block w-[7px] h-[14px] bg-foreground align-middle ml-0.5 animate-caret" />}</pre>
             </div>
           </div>
           <div className="flex items-center justify-between pt-1">
@@ -363,7 +363,7 @@ export default function Landing() {
       {/* ============ cta ============ */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-20 md:py-24">
         <Reveal>
-          <div className="relative overflow-hidden rounded-2xl bg-foreground text-background noise">
+          <div className="relative overflow-hidden rounded-xl bg-foreground text-background noise">
             <div className="absolute inset-0 dot-grid opacity-[0.14]" aria-hidden />
             <div className="relative px-6 py-14 sm:px-14 sm:py-16 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
               <div>

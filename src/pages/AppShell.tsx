@@ -64,7 +64,7 @@ export default function AppShell({ title, sub, children, actions }: { title: str
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center">
-          <span className="inline-flex w-14 h-14 rounded-2xl bg-destructive/10 text-destructive items-center justify-center mb-5"><LockKeyhole className="w-6 h-6" /></span>
+          <span className="inline-flex w-14 h-14 rounded-xl bg-destructive/10 text-destructive items-center justify-center mb-5"><LockKeyhole className="w-6 h-6" /></span>
           <h1 className="font-display text-2xl font-extrabold tracking-tight">Account suspended</h1>
           <p className="text-[14px] text-muted-foreground mt-2.5 leading-relaxed">Your account has been suspended by an administrator. If you believe this is a mistake, contact <a href="mailto:support@chatdeck.ai" className="underline text-foreground">support@chatdeck.ai</a>.</p>
           <Button variant="outline" className="mt-6" onClick={() => { signOut(); toast("info", "Signed out"); }}>Sign out</Button>

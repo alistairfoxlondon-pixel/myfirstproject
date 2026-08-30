@@ -84,6 +84,11 @@ function StudioRoute() {
   const { docId } = useParams();
   return <StudioPage key={docId || "new"} />;
 }
+/* keyed by slug so switching tools resets the form, inputs and last output */
+function ToolRoute() {
+  const { slug } = useParams();
+  return <ToolPage key={slug || "tool"} />;
+}
 
 function NotFound() {
   return (
@@ -119,7 +124,7 @@ function Shell() {
           <Route path="/app/studio" element={<DocumentsPage />} />
           <Route path="/app/studio/:docId" element={<StudioRoute />} />
           <Route path="/app/tools" element={<ToolsPage />} />
-          <Route path="/app/tools/:slug" element={<ToolPage />} />
+          <Route path="/app/tools/:slug" element={<ToolRoute />} />
           <Route path="/app/integrations" element={<IntegrationsPage />} />
           <Route path="/app/history" element={<HistoryPage />} />
           <Route path="/app/billing" element={<BillingPage />} />
