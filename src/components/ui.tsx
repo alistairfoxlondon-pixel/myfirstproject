@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { useReveal } from "../lib/app";
 
@@ -111,18 +111,27 @@ export function Switch({ checked, onChange, disabled }: { checked: boolean; onCh
 
 /* ---------- Modal ---------- */
 export function Modal({ open, onClose, title, children, wide, footer }: { open: boolean; onClose: () => void; title?: React.ReactNode; children: React.ReactNode; wide?: boolean; footer?: React.ReactNode }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const prev = document.activeElement as HTMLElement | null;
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+    /* move focus into the dialog; restore on close */
+    requestAnimationFrame(() => {
+      const el = panelRef.current;
+      if (!el) return;
+      const focusable = el.querySelector<HTMLElement>("input, select, textarea, button:not([aria-label='Close'])");
+      (focusable || el).focus();
+    });
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; prev?.focus?.(); };
   }, [open, onClose]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] animate-fade-in" onClick={onClose} />
-      <div className={cn("relative w-full bg-card border border-border shadow-2xl animate-scale-in rounded-t-2xl sm:rounded-xl max-h-[92vh] flex flex-col", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
+      <div ref={panelRef} tabIndex={-1} className={cn("relative w-full bg-card border border-border shadow-2xl animate-scale-in rounded-t-xl sm:rounded-lg max-h-[92vh] flex flex-col focus:outline-none", wide ? "sm:max-w-2xl" : "sm:max-w-md")}>
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
             <h3 className="font-semibold text-[15px]">{title}</h3>
@@ -250,6 +259,7 @@ export function BarChart({ data, height = 120, className = "" }: { data: { label
 }
 
 export function AreaChart({ data, height = 140, className = "", format }: { data: { label: string; value: number }[]; height?: number; className?: string; format?: (n: number) => string }) {
+  const gid = useId().replace(/[:]/g, "");
   const w = 300, h = 100;
   const max = Math.max(1, ...data.map(d => d.value));
   const pts = data.map((d, i) => [ (i / Math.max(1, data.length - 1)) * w, h - (d.value / max) * (h - 12) - 4 ]);
@@ -265,12 +275,12 @@ export function AreaChart({ data, height = 140, className = "", format }: { data
         }}
         onMouseLeave={() => setHover(null)}>
         <defs>
-          <linearGradient id="agrad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--foreground)" stopOpacity="0.22" />
             <stop offset="100%" stopColor="var(--foreground)" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <path d={area} fill="url(#agrad)" />
+        <path d={area} fill={`url(#${gid})`} />
         <path d={line} fill="none" stroke="var(--foreground)" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
         {hover !== null && pts[hover] && (
           <g>

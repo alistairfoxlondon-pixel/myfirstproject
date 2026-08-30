@@ -1,17 +1,28 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ArrowUpRight, Type, Zap, CalendarClock, Blocks, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Type, Zap, CalendarClock, Blocks, Sparkles, FileText, Plus } from "lucide-react";
 import AppShell from "./AppShell";
+import { FavStar } from "./Studio";
 import { CATEGORY_META, ToolIcon } from "../components/icons";
-import { AreaChart, Badge, Button, Card, Donut, Progress, Reveal, cn } from "../components/ui";
+import { AreaChart, Badge, Button, Card, Donut, EmptyState, Progress, Reveal, cn } from "../components/ui";
 import { useApp } from "../lib/app";
 import { getDb, monthKey, nowISO } from "../lib/db";
 import { fmtDateTime, fmtLimit, fmtNum, listGenerations } from "../lib/services";
+import { listDocs, createDoc, getFavs, toggleFav } from "../lib/content";
 
 export default function Dashboard() {
   const { user, access, refresh } = useApp();
   const nav = useNavigate();
   const db = getDb();
+  const [favs, setFavs] = useState<string[]>(() => (user ? getFavs(user.id) : []));
+  const docs = useMemo(() => (user ? listDocs(user.id).slice(0, 4) : []), [user, access]);
+  const newDoc = () => { if (!user) return; const d = createDoc(user.id, { title: "Untitled document" }); nav(`/app/studio/${d.id}`); };
+  const recommended = useMemo(() => {
+    if (!user || !access) return [];
+    const used = new Set(listGenerations(user.id, { limit: 200 }).map(g => g.toolSlug));
+    return access.available.filter(t => !favs.includes(t.slug) && !used.has(t.slug)).sort((a, b) => b.uses - a.uses).slice(0, 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, access, favs]);
 
   const recent = useMemo(() => (user ? listGenerations(user.id, { limit: 5 }) : []), [user, access]);
   const days14 = useMemo(() => {
@@ -46,7 +57,7 @@ export default function Dashboard() {
 
   return (
     <AppShell title={`${greet}, ${user.name.split(" ")[0]}`} sub={new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-      actions={<Button size="sm" onClick={() => nav("/app/tools")} className="hidden sm:inline-flex"><Sparkles className="w-3.5 h-3.5" /> New draft</Button>}>
+      actions={<Button size="sm" onClick={newDoc} className="hidden sm:inline-flex"><Plus className="w-3.5 h-3.5" /> New draft</Button>}>
       {/* stat tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {tiles.map((t, i) => (
@@ -103,6 +114,63 @@ export default function Dashboard() {
                 </ul>
               </div>
             )}
+          </Card>
+        </Reveal>
+      </div>
+
+      {/* documents + shortcuts */}
+      <div className="grid lg:grid-cols-[1.5fr_1fr] gap-3.5 mt-3.5">
+        <Reveal delay={90}>
+          <Card className="p-5 sm:p-6 h-full">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-display font-bold text-[15.5px] tracking-tight">Recent documents</h2>
+                <p className="text-[12px] text-muted-foreground mt-0.5">From the Content Studio</p>
+              </div>
+              <button onClick={() => nav("/app/studio")} className="text-[12.5px] font-medium text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">All documents <ArrowRight className="w-3.5 h-3.5" /></button>
+            </div>
+            {docs.length === 0 ? (
+              <EmptyState icon={<FileText className="w-5 h-5" />} title="No documents yet"
+                body="Save any generation as a draft, or start from a blank page — then edit, run SEO checks and publish."
+                action={<Button size="sm" onClick={newDoc}><Plus className="w-3.5 h-3.5" /> New document</Button>} />
+            ) : (
+              <ul className="space-y-1">
+                {docs.map(d => (
+                  <li key={d.id}>
+                    <button onClick={() => nav(`/app/studio/${d.id}`)} className="w-full text-left flex items-center gap-3 rounded-lg px-2 py-2.5 -mx-2 hover:bg-accent transition-colors group">
+                      <span className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 text-muted-foreground"><FileText className="w-4 h-4" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-medium truncate">{d.title}</span>
+                        <span className="block text-[11.5px] text-muted-foreground truncate">{d.wordCount.toLocaleString()} words · SEO {d.seo.keyword || "not set"}</span>
+                      </span>
+                      <Badge tone={d.status === "published" ? "success" : "muted"} className="shrink-0">{d.status}</Badge>
+                      <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </Reveal>
+        <Reveal delay={150}>
+          <Card className="p-5 sm:p-6 h-full">
+            <h2 className="font-display font-bold text-[15.5px] tracking-tight mb-1">Your shortcuts</h2>
+            <p className="text-[12px] text-muted-foreground mb-4">Favorites first, then tools you haven't tried</p>
+            <ul className="space-y-1">
+              {[...access.available.filter(t => favs.includes(t.slug)), ...recommended].slice(0, 6).map(t => (
+                <li key={t.slug} className="flex items-center gap-2 rounded-lg px-1 py-1.5 -mx-1 hover:bg-accent transition-colors group">
+                  <button onClick={() => nav(`/app/tools/${t.slug}`)} className="flex items-center gap-3 min-w-0 flex-1 text-left py-1">
+                    <span className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", CATEGORY_META[t.category].chip)}><ToolIcon name={t.icon} className="w-4 h-4" /></span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-medium truncate group-hover:underline underline-offset-2">{t.name.replace("AI ", "")}</span>
+                      <span className="block text-[11px] text-muted-foreground truncate">{favs.includes(t.slug) ? "Favorite" : "Suggested for you"}</span>
+                    </span>
+                  </button>
+                  <FavStar on={favs.includes(t.slug)} label={t.name} onClick={() => { setFavs(toggleFav(user.id, t.slug)); refresh(); }} />
+                </li>
+              ))}
+              {access.available.length === 0 && <p className="text-[13px] text-muted-foreground py-6 text-center">No tools available on this plan.</p>}
+            </ul>
           </Card>
         </Reveal>
       </div>

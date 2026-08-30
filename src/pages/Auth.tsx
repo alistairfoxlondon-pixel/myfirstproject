@@ -5,7 +5,8 @@ import { PublicLayout, SectionHead } from "../components/site";
 import { Logo } from "../components/icons";
 import { Badge, Button, Card, Field, Input, Reveal } from "../components/ui";
 import { PricingSection } from "./Landing";
-import { login, register, resetPassword, getSettings } from "../lib/services";
+import { login, register, getSettings } from "../lib/services";
+import { requestResetCode, consumeResetCode } from "../lib/content";
 import { getDb } from "../lib/db";
 import { useApp } from "../lib/app";
 
@@ -169,34 +170,60 @@ export function RegisterPage() {
 
 export function ForgotPage() {
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState<string | null>(null); // shown only because mail delivery isn't configured in the preview
+  const [codeInput, setCodeInput] = useState("");
   const [pass, setPass] = useState({ p1: "", p2: "" });
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
   const nav = useNavigate();
   const { toast } = useApp();
 
+  const requestCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setErr("Enter a valid email address."); return; }
+    setErr(""); setBusy(true);
+    setTimeout(() => {
+      try { const r = requestResetCode(email); setCode(r.code); }
+      catch (ex: unknown) { setErr((ex as Error).message); }
+      setBusy(false);
+    }, 450);
+  };
+
   return (
-    <AuthShell title="Reset password" sub={sent ? "Since this is a local preview, reset right here — in production this step happens over a secure emailed link." : "Enter your account email and we'll issue a reset."}
+    <AuthShell title="Reset password" sub={code ? "Enter the 6-digit code and choose a new password." : "We'll send a one-time reset code to your account email."}
       footer={<p className="text-[13.5px] text-muted-foreground"><Link to="/login" className="font-medium text-foreground underline underline-offset-2">← Back to sign in</Link></p>}>
       <Card className="p-6">
-        {!sent ? (
-          <form className="space-y-4" onSubmit={e => { e.preventDefault(); if (!email) { setErr("Email is required."); return; } setErr(""); setSent(true); }} noValidate>
-            <Field label="Email" error={err} required><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" /></Field>
-            <Button type="submit" className="w-full">Send reset link</Button>
+        {!code ? (
+          <form className="space-y-4" onSubmit={requestCode} noValidate>
+            {err && <div className="rounded-lg border border-destructive/30 bg-destructive/8 text-destructive text-[13px] px-3.5 py-2.5">{err}</div>}
+            <Field label="Email" required><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" autoComplete="email" /></Field>
+            <Button type="submit" className="w-full" loading={busy}>Send reset code</Button>
           </form>
         ) : !done ? (
           <form className="space-y-4" onSubmit={e => {
             e.preventDefault();
+            if (codeInput.trim().length !== 6) { setErr("Enter the 6-digit code."); return; }
             if (pass.p1.length < 8) { setErr("Minimum 8 characters."); return; }
             if (pass.p1 !== pass.p2) { setErr("Passwords don't match."); return; }
-            try { resetPassword(email, pass.p1); setDone(true); toast("success", "Password updated", "Sign in with your new password."); }
-            catch (ex: unknown) { setErr((ex as Error).message); }
+            setErr(""); setBusy(true);
+            setTimeout(() => {
+              try { consumeResetCode(email, codeInput, pass.p1); setDone(true); toast("success", "Password updated", "Sign in with your new password."); }
+              catch (ex: unknown) { setErr((ex as Error).message); }
+              setBusy(false);
+            }, 400);
           }} noValidate>
+            <div className="rounded-lg border border-amber-500/35 bg-amber-500/8 px-3.5 py-3 text-[12.5px] leading-relaxed">
+              <p className="font-semibold text-amber-700 dark:text-amber-400">Demo inbox</p>
+              <p className="text-muted-foreground mt-1">Email delivery needs a mail provider, which isn't configured in this preview. Your one-time code (expires in 15 min):</p>
+              <p className="font-mono text-[19px] font-bold tracking-[0.3em] mt-2 text-foreground">{code}</p>
+            </div>
             {err && <div className="rounded-lg border border-destructive/30 bg-destructive/8 text-destructive text-[13px] px-3.5 py-2.5">{err}</div>}
-            <Field label="New password" required><Input type="password" value={pass.p1} onChange={e => setPass(p => ({ ...p, p1: e.target.value }))} placeholder="8+ characters" /></Field>
-            <Field label="Confirm new password" required><Input type="password" value={pass.p2} onChange={e => setPass(p => ({ ...p, p2: e.target.value }))} placeholder="Repeat it" /></Field>
-            <Button type="submit" className="w-full">Update password</Button>
+            <Field label="Reset code" required><Input inputMode="numeric" maxLength={6} value={codeInput} onChange={e => setCodeInput(e.target.value.replace(/\D/g, ""))} placeholder="000000" className="font-mono tracking-[0.3em]" /></Field>
+            <Field label="New password" required><Input type="password" value={pass.p1} onChange={e => setPass(p => ({ ...p, p1: e.target.value }))} placeholder="8+ characters" autoComplete="new-password" /></Field>
+            <Field label="Confirm new password" required><Input type="password" value={pass.p2} onChange={e => setPass(p => ({ ...p, p2: e.target.value }))} placeholder="Repeat it" autoComplete="new-password" /></Field>
+            <Button type="submit" className="w-full" loading={busy}>Update password</Button>
+            <button type="button" className="text-[12.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground" onClick={() => { setCode(null); setCodeInput(""); setErr(""); }}>Request a new code</button>
           </form>
         ) : (
           <div className="text-center py-4">

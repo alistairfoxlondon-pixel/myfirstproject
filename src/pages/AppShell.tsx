@@ -1,16 +1,19 @@
 import React, { useState } from "react";
 import { Navigate, NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Blocks, History, CreditCard, Settings, LogOut, Menu, X, ArrowRight, AlertTriangle, Clock3, Sparkles, LockKeyhole } from "lucide-react";
+import { LayoutDashboard, Blocks, History, CreditCard, Settings, LogOut, Menu, X, ArrowRight, AlertTriangle, Clock3, Plus, LockKeyhole, BookOpen, Plug } from "lucide-react";
 import { Logo } from "../components/icons";
 import { Badge, Button, Progress, cn } from "../components/ui";
 import { ThemeToggle } from "../components/site";
 import { useApp } from "../lib/app";
 import { fmtLimit, fmtNum } from "../lib/services";
+import { createDoc } from "../lib/content";
 
 const NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/app/studio", label: "Content Studio", icon: BookOpen },
   { to: "/app/tools", label: "AI Tools", icon: Blocks },
   { to: "/app/history", label: "History", icon: History },
+  { to: "/app/integrations", label: "Integrations", icon: Plug },
   { to: "/app/billing", label: "Billing", icon: CreditCard },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];
@@ -122,8 +125,9 @@ export default function AppShell({ title, sub, children, actions }: { title: str
       </nav>
       <div className="mt-5 space-y-3">
         <UsageWidget />
-        <button onClick={() => nav("/app/tools")} className="w-full flex items-center justify-center gap-2 rounded-xl bg-foreground text-background font-medium text-[13.5px] h-11 hover:bg-foreground/90 transition-all active:scale-[0.98]">
-          <Sparkles className="w-4 h-4" /> New draft
+        <button onClick={() => { if (!user) return; const d = createDoc(user.id, { title: "Untitled document" }); nav(`/app/studio/${d.id}`); }}
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-foreground text-background font-medium text-[13.5px] h-11 hover:bg-foreground/90 transition-all active:scale-[0.98]">
+          <Plus className="w-4 h-4" /> New draft
         </button>
       </div>
     </>

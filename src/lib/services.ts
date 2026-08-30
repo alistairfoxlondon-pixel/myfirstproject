@@ -62,15 +62,8 @@ export function login(email: string, password: string): User {
 
 export function logout() { setSession(null); }
 
-export function resetPassword(email: string, newPassword: string): void {
-  mutate(d => {
-    const user = d.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (!user) throw new ApiError("NOT_FOUND", "No account found for that email.");
-    if (newPassword.length < 8) throw new ApiError("VALIDATION", "Password must be at least 8 characters.");
-    user.passHash = hash(newPassword);
-    log(d, "System", "system", "user.password_reset", `Password reset for ${user.email}`);
-  });
-}
+/* Password resets are code-gated — see requestResetCode / consumeResetCode
+   in lib/content.ts. Codes are single-use and expire after 15 minutes. */
 
 export function currentUser(): User | null {
   const id = getSessionUserId();
@@ -216,8 +209,10 @@ export function checkGeneration(user: User | null, toolSlug: string): { ok: true
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function validateInputs(tool: Tool, inputs: Record<string, string>): string | null {
+  const MAX = { text: 500, textarea: 40000, select: 80, number: 12 };
   for (const f of tool.fields) {
     const v = (inputs[f.key] || "").trim();
+    if (v.length > MAX[f.type]) return `"${f.label}" is too long (max ${MAX[f.type].toLocaleString()} characters).`;
     if (f.required && !v) return `"${f.label}" is required.`;
     if (f.type === "number" && v) {
       const n = Number(v);
@@ -354,7 +349,8 @@ function requireAdmin(user: User | null): asserts user is User {
   if (!user || user.role !== "admin") throw new ApiError("FORBIDDEN", "Administrator access required.");
 }
 
-export const adminStats = () => {
+export const adminStats = (admin: User | null) => {
+  requireAdmin(admin);
   const db = getDb();
   const now = Date.now();
   const users = db.users.filter(u => u.role !== "admin");
@@ -397,7 +393,8 @@ export const adminStats = () => {
   };
 };
 
-export const adminListUsers = () => {
+export const adminListUsers = (admin: User | null) => {
+  requireAdmin(admin);
   const db = getDb();
   return db.users.map(u => {
     const sub = db.subscriptions.filter(s => s.userId === u.id).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0] || null;

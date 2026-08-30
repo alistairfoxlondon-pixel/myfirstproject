@@ -79,7 +79,10 @@ function AdminShell({ title, sub, children, actions }: { title: string; sub?: st
 
 /* ================= overview ================= */
 export function AdminOverview() {
-  const s = useMemo(() => adminStats(), []);
+  const { user: admin } = useApp();
+  const isAdmin = admin?.role === "admin";
+  const s = useMemo(() => (isAdmin ? adminStats(admin) : null), [isAdmin, admin]);
+  if (!isAdmin || !s) return <Navigate to={admin ? "/app" : "/login"} replace />;
   const tiles = [
     { l: "Total users", v: s.totalUsers, d: `+${s.newThisWeek} this week` },
     { l: "Trial users", v: s.trialing, d: "active trials" },
@@ -153,7 +156,8 @@ export function AdminOverview() {
 /* ================= users ================= */
 export function AdminUsers() {
   const { user: admin, toast, refresh } = useApp();
-  const rows = useMemo(() => adminListUsers(), []);
+  const isAdmin = admin?.role === "admin";
+  const rows = useMemo(() => (isAdmin ? adminListUsers(admin) : []), [isAdmin, admin]);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [edit, setEdit] = useState<typeof rows[0] | null>(null);
