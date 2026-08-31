@@ -18,7 +18,6 @@ import {
   listIntegrations, publishDoc, listPublishLogs, externalSuggestions, CONNECTORS,
 } from "../lib/content";
 import { renderImage, imageDataUrl, suggestAltText, ArtStyle } from "../lib/artgen";
-import { ToolIcon } from "../components/icons";
 
 const CONN_ICON: Record<string, typeof Globe> = { globe: Globe, ghost: Ghost, pen: PenLine, layout: LayoutGrid };
 

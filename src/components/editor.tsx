@@ -200,14 +200,21 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
 
   /* ---------- image drag & drop ---------- */
   const [dragOver, setDragOver] = useState(false);
+  const [imgNote, setImgNote] = useState("");
   const insertImageFile = (file: File) => {
     if (!file.type.startsWith("image/")) return;
-    if (file.size > 2_500_000) { alert("Keep images under 2.5 MB so drafts stay light."); return; }
+    if (file.size > 2_500_000) {
+      setImgNote("Image is over 2.5 MB — resize it so the draft stays light.");
+      setTimeout(() => setImgNote(""), 3500);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const src = String(reader.result);
       bodyRef.current?.focus();
       document.execCommand("insertHTML", false, `<p><img src="${src}" alt="" style="max-width:100%;border-radius:8px" /></p>`);
+      setImgNote("Image inserted.");
+      setTimeout(() => setImgNote(""), 3500);
       emit();
     };
     reader.readAsDataURL(file);
@@ -333,6 +340,7 @@ export const RichEditor = forwardRef<EditorHandle, EditorProps>(function RichEdi
         <span>{stats.chars.toLocaleString()} chars</span>
         <span>~{stats.readMin} min read</span>
         <span className="hidden sm:inline">{source ? "HTML source" : "Rich text"}</span>
+        {imgNote && <span className="ml-auto text-foreground animate-fade-in" role="status">{imgNote}</span>}
       </div>
     </div>
   );

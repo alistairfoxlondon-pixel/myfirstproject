@@ -339,8 +339,14 @@ export function subscribe(user: User, planId: string, period: "monthly" | "yearl
       sub.currentPeriodEnd = daysAheadISO(period === "yearly" ? 365 : 30);
       sub.payment = { brand: digits.startsWith("5") ? "Mastercard" : "Visa", last4: digits.slice(-4), exp: card.exp };
     }
-    // Expire old trial subs.
-    for (const s of d.subscriptions) if (s.userId === user.id && s.id !== sub!.id) s.status = s.id === sub!.id ? s.status : (s.status === "trialing" ? "expired" : s.status);
+    /* Every other subscription the user holds is superseded by this one:
+       trials expire, previous paid plans are canceled outright so they can
+       never renew again (prevents double-billing after a plan switch). */
+    for (const s of d.subscriptions) {
+      if (s.userId !== user.id || s.id === sub!.id) continue;
+      if (s.status === "trialing") s.status = "expired";
+      else if (s.status === "active" || s.status === "past_due") { s.status = "canceled"; s.cancelAtPeriodEnd = false; }
+    }
     d.invoices.unshift({
       id: "inv_" + uid(), userId: user.id, number: `INV-2026-${d.seq++}`, planName: plan.name,
       period: period === "yearly" ? "Yearly" : "Monthly", amount, status: "paid", createdAt: nowISO(), last4: digits.slice(-4),
@@ -447,6 +453,8 @@ export const adminListUsers = (admin: User | null) => {
 
 export function adminUpdateUser(admin: User, userId: string, patch: Partial<Pick<User, "name" | "role" | "status" | "company">>): void {
   requireAdmin(admin);
+  if (userId === admin.id && (patch.status === "suspended" || patch.role === "user"))
+    throw new ApiError("FORBIDDEN", "You can't suspend or demote your own admin account.");
   mutate(d => {
     const u = d.users.find(x => x.id === userId); if (!u) throw new ApiError("NOT_FOUND", "User not found.");
     Object.assign(u, patch);
@@ -455,6 +463,7 @@ export function adminUpdateUser(admin: User, userId: string, patch: Partial<Pick
 }
 export function adminDeleteUser(admin: User, userId: string): void {
   requireAdmin(admin);
+  if (userId === admin.id) throw new ApiError("FORBIDDEN", "You can't delete your own account from the admin panel.");
   mutate(d => {
     const u = d.users.find(x => x.id === userId);
     d.users = d.users.filter(x => x.id !== userId);
@@ -478,10 +487,14 @@ export function adminResetUsage(admin: User, userId: string): void {
 
 export function adminSavePlan(admin: User, plan: Plan): void {
   requireAdmin(admin);
+  if (!plan.name.trim()) throw new ApiError("VALIDATION", "Plan name is required.");
+  if (plan.monthly < 0 || plan.yearly < 0) throw new ApiError("VALIDATION", "Prices can't be negative.");
+  if (plan.wordsLimit < -1 || plan.generationsLimit < -1) throw new ApiError("VALIDATION", "Limits must be a positive number or unlimited.");
   mutate(d => {
     const idx = d.plans.findIndex(p => p.id === plan.id);
-    if (idx >= 0) d.plans[idx] = plan; else d.plans.push({ ...plan, id: "plan_" + uid() });
-    log(d, admin.name, "admin", "plan.saved", `${admin.name} saved plan "${plan.name}" ($${plan.monthly}/mo)`);
+    if (idx >= 0) d.plans[idx] = { ...plan, name: plan.name.trim() };
+    else d.plans.push({ ...plan, name: plan.name.trim(), id: "plan_" + uid() });
+    log(d, admin.name, "admin", "plan.saved", `${admin.name} saved plan "${plan.name.trim()}" ($${plan.monthly}/mo)`);
   });
 }
 export function adminDeletePlan(admin: User, planId: string): void {
@@ -651,6 +664,7 @@ export function listSocialPosts(userId: string): SocialPost[] {
 }
 export function saveSocialPost(user: User, sp: Omit<SocialPost, "id" | "userId" | "createdAt"> & { id?: string }): SocialPost {
   if (!sp.text.trim()) throw new ApiError("VALIDATION", "The post needs some content.");
+  if (sp.text.length > 10000) throw new ApiError("VALIDATION", "Post is too long (max 10,000 characters).");
   return mutate(d => {
     if (sp.id) {
       const existing = d.socialPosts.find(s => s.id === sp.id && s.userId === user.id);

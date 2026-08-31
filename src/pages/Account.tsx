@@ -185,6 +185,12 @@ export function BillingPage() {
               <Progress value={r.v} max={r.m === -1 ? r.v + 1 : r.m} />
             </div>
           ))}
+          {(access.wordsLimit !== -1 && access.wordsUsed >= access.wordsLimit || access.gensLimit !== -1 && access.gensUsed >= access.gensLimit) && (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/8 text-amber-700 dark:text-amber-400 text-[12px] px-3 py-2.5 mb-4 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+              Limit reached — new generations are paused until the cycle resets on the 1st, or upgrade for headroom.
+            </div>
+          )}
           <p className="text-[11.5px] text-muted-foreground mt-4 pt-4 border-t border-border">Cycle resets monthly on the 1st. Top tool: <strong className="text-foreground">{usage && Object.entries(usage.byTool).sort((a, b) => b[1] - a[1])[0] ? db.tools.find(t => t.slug === Object.entries(usage!.byTool).sort((a, b) => b[1] - a[1])[0][0])?.name : "—"}</strong></p>
         </Card>
       </div>
@@ -263,7 +269,7 @@ export function BillingPage() {
 }
 
 function CheckoutModal({ state, onClose, onSuccess }: { state: { plan: Plan; period: "monthly" | "yearly" } | null; onClose: () => void; onSuccess: () => void }) {
-  const { user, toast } = useApp();
+  const { user, access, toast } = useApp();
   const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
   const [card, setCard] = useState({ name: "", number: "", exp: "", cvc: "" });
   const [err, setErr] = useState("");
@@ -271,6 +277,8 @@ function CheckoutModal({ state, onClose, onSuccess }: { state: { plan: Plan; per
   React.useEffect(() => { if (state) { setPeriod(state.period); setErr(""); setBusy(false); } }, [state]);
   if (!state || !user) return null;
   const amount = period === "monthly" ? state.plan.monthly : state.plan.yearly;
+  const switching = !!(access?.plan && access.plan.id !== state.plan.id);
+  const isDowngrade = switching && state.plan.wordsLimit !== -1 && (access?.wordsUsed ?? 0) >= state.plan.wordsLimit;
 
   const pay = () => {
     setErr("");
@@ -311,6 +319,15 @@ function CheckoutModal({ state, onClose, onSuccess }: { state: { plan: Plan; per
           </ul>
         </div>
         <div className="space-y-3.5">
+          {switching && (
+            <div className={cn("rounded-lg border px-3.5 py-2.5 text-[12.5px] flex items-start gap-2",
+              isDowngrade ? "border-amber-500/40 bg-amber-500/8 text-amber-700 dark:text-amber-400" : "border-border bg-muted/40 text-muted-foreground")}>
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+              {isDowngrade
+                ? <span>You've already used <strong>{fmtNum(access?.wordsUsed ?? 0)}</strong> words this cycle — more than {state.plan.name} allows. Generating will pause until the cycle resets on the 1st.</span>
+                : <span>Switching from <strong className="text-foreground">{access?.plan?.name}</strong> to <strong className="text-foreground">{state.plan.name}</strong>. New limits apply immediately and the previous plan won't renew.</span>}
+            </div>
+          )}
           {err && <div className="rounded-lg border border-destructive/30 bg-destructive/8 text-destructive text-[12.5px] px-3.5 py-2.5 flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0" />{err}</div>}
           <Field label="Name on card" required><Input value={card.name} onChange={e => setCard(c => ({ ...c, name: e.target.value }))} placeholder="Ada Lovelace" /></Field>
           <Field label="Card number" required help="Demo checkout — use any 16 digits, e.g. 4242 4242 4242 4242">
