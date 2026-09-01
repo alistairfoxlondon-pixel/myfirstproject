@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Authenticated application areas are never indexed
+Disallow: /#/app
+Disallow: /#/admin
+
+Sitemap: https://chatdeck.app/sitemap.xml
